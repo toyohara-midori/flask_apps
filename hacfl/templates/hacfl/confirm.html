@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>登録内容チェック</title>
+    <style>
+        body {
+            font-family: "Meiryo", "Hiragino Kaku Gothic ProN", sans-serif;
+            background-color: #f9f9f9;
+            padding: 20px;
+        }
+
+        h2 {
+            border-bottom: 2px solid #555;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        /* ★変更: テーブルエリアの高さを固定し、スクロール可能にする */
+        .table-container {
+            max-height: 600px; /* ここで高さを制限 */
+            overflow-y: auto; /* 縦スクロールを許可 */
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            background-color: #fff;
+            border: 1px solid #ccc;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1100px;
+            font-size: 0.9em;
+        }
+
+        /* ★重要: ヘッダーを固定する設定 */
+        th {
+            background-color: #343a40;
+            color: #fff;
+            padding: 12px 10px;
+            text-align: center;
+            white-space: nowrap;
+            position: sticky;
+            top: 0; /* 上に張り付く */
+            z-index: 10; /* データより手前に表示 */
+            border: 1px solid #454d55;
+        }
+
+        td {
+            border: 1px solid #dee2e6;
+            padding: 8px 10px;
+            vertical-align: middle;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .row-error {
+            background-color: #fff3f3 !important;
+        }
+
+            .row-error td:first-child {
+                border-left: 5px solid red;
+            }
+
+        .err-msg {
+            color: #dc3545;
+            font-size: 0.85em;
+            margin-top: 2px;
+            text-align: left;
+        }
+
+        .text-muted {
+            color: #6c757d;
+            font-size: 0.85em;
+            line-height: 1.2;
+        }
+
+        .num-col {
+            text-align: right;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 1.1em;
+        }
+
+        .num-center {
+            text-align: center;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 1.1em;
+        }
+
+        .date-col {
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .actions {
+            margin-top: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        button {
+            padding: 12px 0;
+            width: 250px;
+            font-size: 1.1em;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+
+        .btn-primary:hover {
+            background-color: #0069d9;
+        }
+
+        /* コントロールエリア (件数表示など) */
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .filter-box {
+            background-color: #fff;
+            padding: 8px 15px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+            .filter-box:hover {
+                background-color: #f0f0f0;
+            }
+
+        .count-info {
+            font-weight: bold;
+            color: #555;
+        }
+    </style>
+
+    <script>
+        // エラー行のみ表示するフィルタ機能
+        function toggleErrorRows(checkbox) {
+            const rows = document.querySelectorAll('tbody tr');
+            const showOnlyError = checkbox.checked;
+
+            rows.forEach(row => {
+                if (showOnlyError) {
+                    // エラークラスを持っていない行は隠す
+                    if (!row.classList.contains('row-error')) {
+                        row.style.display = 'none';
+                    } else {
+                        row.style.display = '';
+                    }
+                } else {
+                    // 全表示
+                    row.style.display = '';
+                }
+            });
+        }
+    </script>
+</head>
+<body>
+    <h2>登録内容チェック</h2>
+
+    {% if error_msg %}
+    <div class="alert alert-danger">{{ error_msg }}</div>
+    {% endif %}
+
+    {% if has_error %}
+    <div class="alert alert-danger">
+        エラーが含まれている行があります（赤色部分）。<br>
+        CSVを修正して、最初からやり直してください。
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        エラーはありません。<br>以下の内容で登録を進めてよろしいですか？
+    </div>
+    {% endif %}
+
+    <div class="controls">
+        <div class="count-info" style="font-size:1.2em; color:#007bff;">
+            登録予定件数: <span style="font-size:1.4em; font-weight:bold;">{{ data_list|length }}</span> 件
+        </div>
+
+        <label class="filter-box">
+            <input type="checkbox" onchange="toggleErrorRows(this)">
+            <span style="color:#dc3545">■</span> エラー行のみ表示する
+        </label>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40px;">No.</th>
+                    <th style="width: 70px;">店舗CD</th>
+                    <th style="width: 90px;">商品CD</th>
+                    <th style="text-align:left;">品名 / 規格 / メーカー</th>
+                    <th style="width: 60px;">部門</th>
+                    <th style="width: 50px;">入数</th>
+                    <th style="width: 60px;">B単</th>
+                    <th style="width: 70px;">発注数</th>
+                    <th style="width: 100px;">発注日</th>
+                    <th style="width: 100px;">納品日</th>
+                    <th style="text-align:left;">エラー内容</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in data_list %}
+                <tr class="{{ 'row-error' if item.errors else '' }}">
+
+                    <td style="text-align:center; font-weight:bold;">{{ item.line_num }}</td>
+
+                    <td style="font-weight:bold; text-align:center;">{{ item.cols[0] }}</td>
+                    <td style="text-align:center;">{{ item.cols[1] }}</td>
+
+                    <td>
+                        <div style="font-weight:bold; color:#0056b3;">{{ item.item_name }}</div>
+                        {% if item.kika %}
+                        <div class="text-muted">{{ item.kika }}</div>
+                        {% endif %}
+                        {% if item.maker %}
+                        <div class="text-muted">{{ item.maker }}</div>
+                        {% endif %}
+                    </td>
+
+                    <td style="text-align:center; color: #555; background-color: #eee;">
+                        {{ item.master_bucd }}
+                    </td>
+
+                    <td class="num-center">{{ item.irsu }}</td>
+                    <td class="num-center">{{ item.btan }}</td>
+                    <td class="num-col" style="font-weight:bold;">{{ item.cols[2] }}</td>
+
+                    <td class="date-col">
+                        {% if item.cols[3] %}{{ item.cols[3] }}{% else %}-{% endif %}
+                    </td>
+                    <td class="date-col">
+                        {% if item.cols[4] %}{{ item.cols[4] }}{% else %}-{% endif %}
+                    </td>
+
+                    <td>
+                        {% for e in item.errors %}
+                        <div class="err-msg">■ {{ e }}</div>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="actions">
+        {% if not has_error %}
+        <form method="post">
+            <button type="submit" class="btn-primary">確定して登録</button>
+        </form>
+        {% endif %}
+
+        <a href="{{ url_for('hacfl.index') }}">
+            <button type="button" class="btn-secondary">CSV登録に戻る</button>
+        </a>
+    </div>
+
+</body>
+</html>

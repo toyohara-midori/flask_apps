@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>登録完了</title>
+    <style>
+        body {
+            font-family: "Meiryo", "Hiragino Kaku Gothic ProN", sans-serif;
+            background-color: #f4f6f9;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .card {
+            background-color: #fff;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 50px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .icon-circle {
+            width: 80px;
+            height: 80px;
+            background-color: #28a745;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .icon-check {
+            color: #fff;
+            font-size: 40px;
+            font-weight: bold;
+        }
+
+        h2 {
+            color: #28a745;
+            margin-bottom: 10px;
+        }
+
+        p {
+            color: #555;
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+
+        /* 件数表示用 */
+        .count-display {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0;
+        }
+
+        .btn {
+            display: inline-block;
+            margin-top: 30px;
+            background-color: #007bff;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+            .btn:hover {
+                background-color: #0069d9;
+            }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <div class="icon-circle">
+            <div class="icon-check">✔</div>
+        </div>
+
+        <h2>登録完了</h2>
+
+        <p>hacfl04へのデータ登録が正常に完了しました。</p>
+
+        <div class="count-display">
+            登録件数: <span style="color:#28a745;">{{ count }}</span> 件
+        </div>
+
+        <a href="{{ url_for('hacfl.index') }}" class="btn">TOP画面へ戻る</a>
+    </div>
+
+</body>
+</html>
