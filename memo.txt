@@ -1,5 +1,0 @@
-git add .
-git commit -m "remove large installer files"
-
-git push
-
