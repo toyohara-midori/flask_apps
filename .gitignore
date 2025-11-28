@@ -8,5 +8,8 @@ venv/
 # 環境変数ファイル
 .env
 
-# VSCodeなど
+# エディタ
 .vscode/
+
+# exeファイル
+*.exe
