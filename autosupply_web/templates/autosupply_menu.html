@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('autosupply_web.static', filename='autosupply_style.css') }}">
+  <title>6.1 自動補充什器メニュー</title>
+</head>
+<body>
+  <div class="container menu-page">
+    <div class="header">
+      <div class="title">6.1 自動補充什器メニュー</div>
+      <div class="ver">Ver1.0.00</div>
+    </div>
+
+    <div class="menu">
+      <form action="/flask/autosupply_web/autosupply_single_entry" method="get">
+        <button type="submit">個別登録/変更/削除</button>
+      </form>
+
+      <form action="/flask/autosupply_web/autosupply_export" method="post">
+        <button type="submit">データ抽出</button>
+      </form>
+
+      <form action="/flask/autosupply_web/autosupply_bulk_entry" method="get">
+        <button type="submit">一括登録</button>
+      </form>
+
+      <form action="/flask/autosupply_web/autosupply_main" method="get">
+        <button type="submit" class="secondary">戻る</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

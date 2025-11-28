@@ -1,0 +1,9 @@
+/* 画面タイトル。ちょっと隙間あけて画像を入れるためのもの */
+.title-area {
+    display: flex;
+    align-items: center;
+    gap: 20px;   /* 20px の間隔 */
+}
+    .title-area img {
+        height: 60px;
+    }

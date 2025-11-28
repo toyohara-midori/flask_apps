@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('autosupply_web.static', filename='autosupply_style.css') }}">
+  <title>6 自動補充マスター</title>
+</head>
+<body>
+  <div class="container menu-page">
+    <div class="header">
+      <div class="title">6 自動補充マスター</div>
+      <div class="ver">Ver1.0.00</div>
+    </div>
+
+    <div class="menu">
+      <form action="/autosupply_web/autosupply_menu" method="get">
+        <button type="submit">自動補充什器マスター</button>
+      </form>
+
+      <form action="" method="post">
+        <button type="submit" class="disabled-btn" disabled>(準備中)</button>
+      </form>
+
+      <form action="" method="get">
+        <button type="submit" class="disabled-btn" disabled>(準備中)</button>
+      </form>
+
+      <form action="http://web-gsys1/syouhin_web_menu/syouhin_web_menu/syouhin_web_menu" method="get">
+        <button type="submit" class="secondary">戻る</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

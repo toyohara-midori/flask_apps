@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>6.1.1 個別登録／変更／削除</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('autosupply_web.static', filename='autosupply_style.css') }}">
+</head>
+<body class="single-entry">
+  <div class="container  single-entry">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">6.1.1 個別登録／変更／削除</div>
+        </div>
+        <div class="ver">Ver1.0.00</div>
+      </div>  <!--div class="card-header" -->
+      <div class="card-body">
+        <form method="post" action="{{ url_for('autosupply_web.page') }}">
+        <input type="hidden" name="action" id="actionHidden" value="view">
+          <div class="row">
+            <div style="position: relative;">
+              <label for="cucd">店舗CD</label>
+              <input id="cucd" name="cucd" type="text" maxlength="3"
+                 value="{{ cucd or '' }}" placeholder="例: 123，B75"
+                 autocomplete="off"
+                 inputmode="none" 
+                 style="ime-mode: disabled; text-transform: uppercase;" />
+              <div id="autocompleteList" class="autocomplete-list" style="display:none; position:absolute; left:0; top:65px;"></div>
+            </div>
+              <!-- 店舗名（ボタンなし） -->
+              <div>
+                <label>店舗名</label>
+                <div class="readonly-field">{{ nmkj_cu or '' }}</div>
+              </div>
+              <!-- 什器番号 + 表示ボタンを横並び -->
+              <div>
+                <label for="jyno">什器番号</label>
+                <div class="with-action">
+                  <input id="jyno" name="jyno" type="text" maxlength="5" value="{{ jyno or '' }}" placeholder="例: 01234" />
+                  <button class="primary" type="submit" onclick="document.getElementById('actionHidden').value='view'">表示</button>
+                </div>
+                <div class="hint">※ 数字のみ、5桁</div>
+              </div>
+          </div>  <!-- div class="row" -->
+          <div>
+            <div class="days-header">
+              <label style="margin:0 0 10 0;">発注曜日（✓=発注、空白=発注なし）</label>
+              <label class="chip toggle-all" style="user-select:none; cursor:pointer;">
+              <input type="checkbox" id="toggleAllDays" />全選択</label>
+            </div>
+            <div class="days">
+              <label class="chip"><input type="checkbox" name="sun" value="1" {{ 'checked' if days and days.get('sun') else '' }}> 日</label>
+              <label class="chip"><input type="checkbox" name="mon" value="1" {{ 'checked' if days and days.get('mon') else '' }}> 月</label>
+              <label class="chip"><input type="checkbox" name="tue" value="1" {{ 'checked' if days and days.get('tue') else '' }}> 火</label>
+              <label class="chip"><input type="checkbox" name="wed" value="1" {{ 'checked' if days and days.get('wed') else '' }}> 水</label>
+              <label class="chip"><input type="checkbox" name="thu" value="1" {{ 'checked' if days and days.get('thu') else '' }}> 木</label>
+              <label class="chip"><input type="checkbox" name="fri" value="1" {{ 'checked' if days and days.get('fri') else '' }}> 金</label>
+              <label class="chip"><input type="checkbox" name="sat" value="1" {{ 'checked' if days and days.get('sat') else '' }}> 土</label>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="ghost" type="submit" 
+                onclick="document.getElementById('actionHidden').value='insert'">登録</button>
+            <button class="danger" type="submit"
+                onclick="if(!confirm('削除してよろしいですか？')) return false;
+                document.getElementById('actionHidden').value='delete'">削除</button>
+            <button class="ghost" type="submit" 
+                onclick="document.getElementById('actionHidden').value='clear'">クリア</button>
+            <div class="spacer"></div>  <!-- 左と右を離すためのスペーサー -->
+            <!-- 戻る（フォーム送信しない。メニューへ遷移） -->
+            <a class="secondary" href="/flask/autosupply_web/autosupply_menu" style="padding:10px 16px; 
+                border-radius:10px; font-weight:600; text-decoration:none;">戻る
+            </a>
+          </div>
+
+          <div id="msgBox"
+            {% set css_class = 'ok' if '完了' in message or '成功' in message or '表示' in message
+                     else 'ng' if 'エラー' in message or '誤り' in message or 'ありません' in message
+                     or '違います' in message or '入力' in message or '不正' in message
+                     else '' %}
+            class="message {% if message %}{{ css_class }}{% endif %}">
+            {{ message or "" }}
+          </div>
+
+        </form>
+      </div>  <!-- div class="card-body" -->
+    </div>  <!-- div class="card" -->
+  </div>  <!-- div class="container" -->
+<script>
+  (function(){
+    const ids = ["sun","mon","tue","wed","thu","fri","sat"];
+    const toggle = document.getElementById("toggleAllDays");
+    const boxes = ids
+      .map(id => document.querySelector(`input[type="checkbox"][name="${id}"]`))
+      .filter(Boolean);
+
+    // トグル → 全部ON/OFF
+    toggle?.addEventListener("change", () => {
+      boxes.forEach(cb => { cb.checked = toggle.checked; });
+    });
+
+    // 個別変更 → トグル状態を同期（全部ONならON、全部OFFならOFF、混在なら未チェック）
+    const syncToggle = () => {
+      const on = boxes.filter(cb => cb.checked).length;
+      if (!toggle) return;
+      toggle.checked = on === boxes.length;
+      // indeterminate（中間表示）は任意で。入れたい場合は↓のコメントを外す
+      // toggle.indeterminate = (on > 0 && on < boxes.length);
+    };
+    boxes.forEach(cb => cb.addEventListener("change", syncToggle));
+    // 初期表示時にも同期
+    syncToggle();
+  })();
+
+    // 半角英数字のみ入力可能（全角→自動変換）
+  function enforceHalfWidth(e) {
+    const input = e.target;
+    // 全角英数字を半角に変換
+    input.value = input.value.replace(/[！-～]/g, (s) =>
+      String.fromCharCode(s.charCodeAt(0) - 0xfee0)
+    );
+  // 英数字以外を削除
+  input.value = input.value.replace(/[^A-Za-z0-9]/g, "");
+  }
+
+  document.getElementById("cucd")?.addEventListener("input", enforceHalfWidth);
+  document.getElementById("jyno")?.addEventListener("input", enforceHalfWidth);
+
+  // 登録ボタン押下時のチェック判定
+  document.querySelector('button[onclick*="insert"]')?.addEventListener("click", function (e) {
+    const dayIds = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    const checkedCount = dayIds.filter(id => document.querySelector(`input[name="${id}"]`)?.checked).length;
+    if (checkedCount === 0) {
+      alert("1つ以上の項目にチェックを入れてください。");
+      e.preventDefault();  // フォーム送信を中止
+    }
+  });
+
+// 店舗CD入力オートコンプリート用処理
+(async function() {
+  const input = document.getElementById("cucd");
+  const list = document.getElementById("autocompleteList");
+  let allItems = [];
+
+  // ① 初期ロードで候補一覧を取得
+  try {
+    const res = await fetch("/flask/autosupply_web/api/cucd_list");
+    if (res.ok) allItems = await res.json();
+  } catch (e) {
+    console.error("候補取得失敗:", e);
+  }
+
+  //DBG
+  //console.log("★ allItems (first 10):", allItems.slice(0, 10));
+
+  // ② 入力イベント
+  input.addEventListener("input", () => {
+  // ★ ここで全角→半角変換を適用！
+    input.value = input.value.replace(/[！-～]/g, (s) =>
+      String.fromCharCode(s.charCodeAt(0) - 0xFEE0)
+    );
+
+    const val = input.value.trim();
+    list.innerHTML = "";
+    if (val.length === 0) {
+      list.style.display = "none";
+      return;
+    }
+
+    // 全角→半角に統一
+    const normalize = s => s.replace(/[！-～]/g, ch =>
+      String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)
+    );
+
+    // 部分一致（前方一致）を半角変換後に比較
+    const matched = allItems.filter(x => normalize(x).startsWith(normalize(val)));
+
+    if (matched.length === 0) {
+      list.style.display = "none";
+      return;
+    }
+
+    matched.forEach(item => {
+      const div = document.createElement("div");
+      div.className = "autocomplete-item";
+      div.textContent = item;
+      div.addEventListener("click", async () => {
+        const cd = item.substring(0, 3);
+        input.value = cd;
+        list.style.display = "none";
+
+       // ★ 店舗名反映API呼び出し
+        try {
+          const res = await fetch("/flask/autosupply_web/api/chk_cucd", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cucd: cd })
+          });
+          if (res.ok) {
+            const j = await res.json();
+            if (j.ok && j.nmkn) {
+              const nmField = document.querySelector(".readonly-field");
+            if (nmField) nmField.textContent = j.nmkn;
+            }
+          }
+        } catch (e) {
+        console.warn("chk_cucd呼び出し失敗:", e);
+        }
+
+        // フォーカス外してイベント発火（必要なら残す）
+        input.dispatchEvent(new Event("change"));
+
+      });
+      list.appendChild(div);
+    });
+
+    // リストをトップ位置に戻す
+    list.scrollTop = 0;
+
+    list.style.display = "block";
+  });
+
+  input.addEventListener("keydown", (e) => {
+   const items = list.querySelectorAll(".autocomplete-item");
+    if (list.style.display === "none" || items.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      selectedIndex = (selectedIndex + 1) % items.length;
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+    } else if (e.key === "Enter") {
+      if (selectedIndex >= 0 && selectedIndex < items.length) {
+        e.preventDefault();
+        e.stopImmediatePropagation();                // ★ 後続の keydown リスナーを止める
+        window.__cucdSelecting = true;               // ★ ガードON
+
+        // --- 確定前に正規化を挟む ---
+        const selectedText = items[selectedIndex].textContent || "";
+        let cd = selectedText.substring(0, 3).trim();
+        cd = cd.replace(/[！-～]/g, (s) =>
+          String.fromCharCode(s.charCodeAt(0) - 0xFEE0)
+        ).toUpperCase();
+        input.value = cd;
+
+        // クリック動作を実行（店舗名の反映など）
+        items[selectedIndex].click();
+
+        selectedIndex = -1;
+      }
+      return;
+    } else {
+      selectedIndex = -1; // 他のキー入力では選択リセット
+      return;
+    }
+
+    // ハイライト更新
+    items.forEach((item, i) => {
+      item.classList.toggle("active", i === selectedIndex);
+    });
+
+    // スクロール位置を追従させる
+    const activeItem = items[selectedIndex];
+    if (activeItem) {
+      const itemTop = activeItem.offsetTop;
+      const itemBottom = itemTop + activeItem.offsetHeight;
+      if (itemTop < list.scrollTop) {
+        list.scrollTop = itemTop;
+      } else if (itemBottom > list.scrollTop + list.clientHeight) {
+        list.scrollTop = itemBottom - list.clientHeight;
+      }
+    }
+  });
+
+  // ③ フォーカス外れたらリスト非表示
+  document.addEventListener("click", (e) => {
+    if (!list.contains(e.target) && e.target !== input) {
+      list.style.display = "none";
+    }
+  });
+
+  // Enterキー押下時にも閉じる（念のため）
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      list.style.display = "none";
+    }
+  });
+})();
+
+// --- CUCD入力欄でEnter押下時の処理を追加 ---
+document.getElementById("cucd")?.addEventListener("keydown", async (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault(); // フォーム送信を止める
+
+    const cd = e.target.value.trim();
+    if (!cd) return;
+
+    try {
+      const res = await fetch("/flask/autosupply_web/api/chk_cucd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cucd: cd })
+      });
+      if (res.ok) {
+        const j = await res.json();
+        const nmField = document.querySelector(".readonly-field");  //追加
+        const msgField = document.querySelector(".message"); //追加 ← 既存メッセージ領域
+
+        // 店舗名更新
+        if (nmField) nmField.textContent = j.nmkn || "";  //追加
+
+        // エラー or 正常メッセージ表示
+        if (j.ok) {
+          if (msgField) {
+            msgField.textContent = "店舗コード確認OK";
+            msgField.className = "message ok";
+          }
+        } else {
+          if (msgField) {
+            msgField.textContent = j.msg || "店舗CDに誤りがあります。";
+            msgField.className = "message ng";
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("chk_cucd呼び出し失敗:", err);
+    }
+  }
+});
+</script>
+</body>
+</html>

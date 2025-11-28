@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('autosupply_web.static', filename='autosupply_style.css') }}">
+  <title>6.1.2 自動補充什器一括登録</title>
+</head>
+<body>
+  <div class="container bulk-entry">
+    <div class="header">
+      <div class="title">6.1.2 自動補充什器一括登録</div>
+      <div class="ver">Ver1.0.00</div>
+    </div>
+
+    <div class="row">
+      <input id="fileInput" type="file" accept=".csv" />
+      <button id="uploadBtn" class="primary">アップロード</button>
+      <button id="backBtn" class="secondary" onclick="location.href='/flask/autosupply_web/autosupply_menu'">戻る</button>
+    </div>
+
+    <div id="resultSection" class="result-area hidden">
+      <div class="counts">
+        <div>登録件数：<span id="insCount">0</span> 件</div>
+        <div>削除件数：<span id="delCount">0</span> 件</div>
+        <div>エラー件数：<span id="errCount">0</span> 件</div>
+      </div>
+
+      <div class="error-section">
+        <div id="errorArea" class="hidden" style="flex:1;">
+          <h4>エラー行一覧</h4>
+          <table class="error-table" style="table-layout: fixed; width: 100%;">
+            <thead>
+              <tr>
+                <th style="width:50px;">行</th>
+                <th style="width:300px;">内容</th>
+                <th style="width:40px;">店舗</th>
+                <th style="width:50px;">什器</th>
+                <th style="width:20px;">日</th>
+                <th style="width:20px;">月</th>
+                <th style="width:20px;">火</th>
+                <th style="width:20px;">水</th>
+                <th style="width:20px;">木</th>
+                <th style="width:20px;">金</th>
+                <th style="width:20px;">土</th>
+                <th style="width:35px;">削除</th>
+              </tr>
+            </thead>
+            <tbody id="errorTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="confirmArea" class="confirm hidden">
+        <p>この内容で登録してよろしいですか？</p>
+        <div class="row">
+          <button id="okBtn" class="primary">OK</button>
+          <button id="cancelBtn" class="secondary">キャンセル</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const resultSection = document.getElementById("resultSection");
+    const insCount = document.getElementById("insCount");
+    const delCount = document.getElementById("delCount");
+    const errCount = document.getElementById("errCount");
+    const errorArea = document.getElementById("errorArea");
+    const confirmArea = document.getElementById("confirmArea");
+    const errorTableBody = document.getElementById("errorTableBody");
+    const okBtn = document.getElementById("okBtn");
+    const cancelBtn = document.getElementById("cancelBtn");
+
+    // 保持用（後でOK押下時に送信）
+    let rowsState = [];
+
+    // === 店舗CD（cucd）存在チェック API 呼び出し ===
+    async function fetchInvalidCucdSet(cucdList) {
+      const uniq = Array.from(new Set(cucdList.filter(v => v)));
+      if (uniq.length === 0) return new Set();
+      try {
+        const res = await fetch("/autosupply_web/api/check_cucd_bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cucd: uniq })
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const json = await res.json();
+        const invalid = (json.invalid || []).map(s => (s ?? "").trim());
+        return new Set(invalid);
+      } catch (e) {
+        console.warn("cucd存在チェックに失敗:", e);
+        // 失敗時は 003 を付けず（処理は継続）
+        return new Set();
+      }
+    }
+
+    // === 削除対象（arsjy04）存在チェック API 呼び出し（007 判定用） ===
+    async function fetchDeleteNotFoundSet(pairs) {
+      if (!pairs || pairs.length === 0) return new Set();
+      try {
+        const res = await fetch("/autosupply_web/api/check_arsjy04_exists_bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: pairs })
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const json = await res.json();
+        // not_found は [{cucd, jyno}] で返ってくる想定
+        const nf = (json.not_found || []).map(it => `${(it.cucd||'').trim()}|${(it.jyno||'').trim()}`);
+        return new Set(nf);
+      } catch (e) {
+        console.warn("削除対象存在チェックに失敗:", e);
+        // 失敗時は 007 を付けず（処理は継続）
+        return new Set();
+      }
+    }
+
+    // === アップロード処理本体 ===
+    async function processCsv(file) {
+      if (!file) {
+        alert("CSVファイルを選択してください。");
+        return;
+      }
+
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+      if (lines.length === 0) {
+        alert("データが存在しません。");
+        return;
+      }
+
+      const data = lines.map(line => line.split(","));
+
+      // 003 用（店舗CD存在チェック）
+      const cucdCandidates = data
+        .filter(cols => cols.length === 10 && (cols[0] || "").trim())  // 001/002 は除外
+        .map(cols => (cols[0] || "").trim());
+      const invalidCucd = await fetchInvalidCucdSet(cucdCandidates);
+
+      // 007 用（削除対象存在チェック）の候補を先に集める
+      const deletePairs = [];
+      data.forEach(cols => {
+        if (cols.length !== 10) return;
+        const cucd = (cols[0] || "").trim();
+        const jyno = (cols[1] || "").trim();
+        const delFlag = (cols[9] || "").trim();
+        const weekCols = cols.slice(2, 10);
+        const invalidWeek = weekCols.some(v => v.trim() !== "" && v.trim() !== "1");
+        if (!cucd || !jyno) return;
+        if (invalidCucd.has(cucd)) return;
+        if (!/^\d{5}$/.test(jyno)) return;
+        if (invalidWeek) return;
+        if (delFlag === "1") deletePairs.push({cucd, jyno});
+      });
+      const notFoundDeleteSet = await fetchDeleteNotFoundSet(deletePairs);
+
+      let ins = 0, del = 0, err = 0;
+      const errRows = [];
+      rowsState = []; // reset
+
+      data.forEach((cols, idx) => {
+        let errcd = "";
+        const cucd = (cols[0] || "").trim();
+        const jyno = (cols[1] || "").trim();
+
+        if (cols.length !== 10) errcd = "001";
+        else if (!cucd || !jyno) errcd = "002";
+        else if (invalidCucd.has(cucd)) errcd = "003";
+        else if (!/^\d{5}$/.test(jyno)) errcd = "004";
+        else {
+          const weekCols = cols.slice(2, 10);
+          const invalidIdx = weekCols.findIndex(v => v.trim() !== "" && v.trim() !== "1");
+          if (invalidIdx !== -1) errcd = "005";
+          else {
+            const delFlag = (cols[9] || "").trim();
+            const hasOrder = weekCols.slice(0, 7).some(v => v.trim() === "1");
+            if (delFlag !== "1" && !hasOrder) errcd = "006";
+            else if (delFlag === "1") {
+              const key = `${cucd}|${jyno}`;
+              if (notFoundDeleteSet.has(key)) errcd = "007";
+            }
+          }
+        }
+
+        rowsState.push({
+          cucd, jyno,
+          sun: (cols[2]||"").trim(), mon: (cols[3]||"").trim(), tue: (cols[4]||"").trim(),
+          wed: (cols[5]||"").trim(), thu: (cols[6]||"").trim(), fri: (cols[7]||"").trim(),
+          sat: (cols[8]||"").trim(), del: (cols[9]||"").trim(),
+          errcd
+        });
+
+        if (errcd) {
+          err++;
+          errRows.push({
+            line: idx + 1,
+            msg: errMsg(errcd),
+            data: cols
+          });
+        } else if ((cols[9] || "").trim() === "1") {
+          del++;
+        } else {
+          ins++;
+        }
+      });
+
+      // 表示更新
+      insCount.textContent = ins;
+      delCount.textContent = del;
+      errCount.textContent = err;
+      resultSection.classList.remove("hidden");
+
+      if (err > 0) {
+        // エラーあり：一覧表示し、選択したファイル名と入力そのものをクリア
+        errorArea.classList.remove("hidden");
+        errorTableBody.innerHTML = errRows.map(r => `
+          <tr>
+            <td class="right" >${r.line}</td>
+            <td>${r.msg}</td>
+            <td>${r.data[0] || ""}</td>
+            <td>${r.data[1] || ""}</td>
+            <td>${r.data[2] || ""}</td>
+            <td>${r.data[3] || ""}</td>
+            <td>${r.data[4] || ""}</td>
+            <td>${r.data[5] || ""}</td>
+            <td>${r.data[6] || ""}</td>
+            <td>${r.data[7] || ""}</td>
+            <td>${r.data[8] || ""}</td>
+            <td>${r.data[9] || ""}</td>
+          </tr>`).join("");
+        confirmArea.classList.add("hidden");
+        // エラー時は file input をクリア
+        fileInput.value = "";
+      } else if ((ins + del) > 0) {
+        // エラーなし：確認ブロック表示、ファイル名はそのまま
+        confirmArea.classList.remove("hidden");
+        errorArea.classList.add("hidden");
+      }
+    }
+
+    // === アップロードボタン押下 ===
+    uploadBtn.addEventListener("click", async () => {
+      const file = fileInput.files[0];
+      await processCsv(file);
+    });
+
+    // エラーコード→内容変換
+    function errMsg(code) {
+      switch (code) {
+        case "001": return "CSVの入力形式に誤りがあります";
+        case "002": return "店舗CDまたは什器NOが空白です";
+        case "003": return "店舗CDが存在しません";
+        case "004": return "什器NOが数字の5桁ではありません";
+        case "005": return "発注曜日または削除に 1/空白 以外の値があります";
+        case "006": return "発注曜日が設定されていません";
+        case "007": return "削除するデータが存在しません";
+        default: return "";
+      }
+    }
+
+    okBtn.addEventListener("click", async () => {
+      try {
+        const items = rowsState.filter(r => (r.errcd || "").trim() === "");
+        if (items.length === 0) { alert("登録対象がありません。"); return; }
+        const res = await fetch("/autosupply_web/api/bulk_apply_arsjy04", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items })
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const j = await res.json();
+        if (j.ok) {
+          alert(`登録完了しました。\n登録: ${j.inserted} 件\n更新: ${j.updated} 件\n削除: ${j.deleted} 件`);
+          resetForm();
+        } else {
+          alert("登録に失敗しました: " + (j.error || "不明なエラー"));
+        }
+      } catch (e) {
+        alert("登録時エラー: " + e.message);
+      }
+    });
+
+    cancelBtn.addEventListener("click", resetForm);
+
+    function resetForm() {
+      fileInput.value = "";
+      rowsState = [];
+      insCount.textContent = "0";
+      delCount.textContent = "0";
+      errCount.textContent = "0";
+      resultSection.classList.add("hidden");
+      errorArea.classList.add("hidden");
+      confirmArea.classList.add("hidden");
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+/* 実績表は横スクロール可に */
+.table-wrap {
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+/* メッセージラベル */
+#msg {
+    font-weight: bold;
+    color: red;
+}
