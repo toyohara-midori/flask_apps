@@ -13,11 +13,23 @@ from cart_result import cart_result_bp  # cart_result/__init__.py
 
 from hacfl import hacfl_bp
 
+class PrefixMiddleware(object):
+    def __init__(self, app, prefix=''):
+        self.app = app
+        self.prefix = prefix
+
+    def __call__(self, environ, start_response):
+        # Flaskに「私のルートURLは /flask です」と強制的に教える
+        environ['SCRIPT_NAME'] = self.prefix
+        return self.app(environ, start_response)
+
 # メインFlaskサーバ
 app = Flask(__name__)
 
 #セッションキー作成
 app.secret_key = "secret_key_12345"
+
+app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix='/flask')
 
 # Blueprint登録（URLプレフィックスごとに分ける）
 app.register_blueprint(autosupply_bp, url_prefix='/autosupply_web')
