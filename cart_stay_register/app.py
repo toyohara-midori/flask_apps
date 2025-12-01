@@ -9,7 +9,7 @@ cart_bp = Blueprint(
     __name__,
     template_folder="templates",
     static_folder="static",
-    static_url_path="/flask/cart_stay_register/static"   # IIS 配下のURLと合わせる
+    static_url_path="/static"
 )
 
 # -------------------------
