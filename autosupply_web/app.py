@@ -14,11 +14,6 @@ autosupply_bp = Blueprint(
     static_folder="static"
 )
 
-# app = Blueprint('autosupply', __name__,
-#                 template_folder='templates',
-#                 static_folder='static',
-#                 static_url_path='/autosupply/static')
-
 # -------------------------
 # 個別登録/変更/削除画面
 # -------------------------
