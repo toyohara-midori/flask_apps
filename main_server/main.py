@@ -32,9 +32,9 @@ app.secret_key = "secret_key_12345"
 app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix='/flask')
 
 # Blueprint登録（URLプレフィックスごとに分ける）
-app.register_blueprint(autosupply_bp, url_prefix='/flask/autosupply_web')
-app.register_blueprint(cart_bp, url_prefix="/flask/cart_stay_register")
-app.register_blueprint(cart_result_bp, url_prefix="/flask/cart_result")
+app.register_blueprint(autosupply_bp, url_prefix='/autosupply_web')
+app.register_blueprint(cart_bp, url_prefix="/cart_stay_register")
+app.register_blueprint(cart_result_bp, url_prefix="/cart_result")
 
 app.register_blueprint(hacfl_bp, url_prefix="/hacfl")
 
