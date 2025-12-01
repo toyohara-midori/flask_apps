@@ -4,6 +4,7 @@ __pycache__/
 
 # venv 仮想環境
 venv/
+env/
 
 # 環境変数ファイル
 .env
@@ -13,3 +14,9 @@ venv/
 
 # exeファイル
 *.exe
+
+# Visual Studioの設定ファイル（あなたの道具）
+.vs/
+*.sln
+*.suo
+*.user
