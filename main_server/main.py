@@ -35,6 +35,11 @@ def debug_static_main():
         "app_static_url_path": app.static_url_path
     })
 
+@app.route('/')
+def root_check():
+    return "<h1>Flask Server is Alive!</h1>"
+
+# ----------------------------------------
 if __name__ == "__main__":
     #app.run(host="0.0.0.0", port=5000, debug=True)
     # use_reloader=False を追加しました
