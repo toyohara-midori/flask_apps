@@ -10,7 +10,9 @@ from common.hacfl_db_logic import (
 hacfl_bp = Blueprint(
     'hacfl', 
     __name__, 
-    template_folder='templates'
+    template_folder='templates',
+    static_folder='static',
+    static_url_path='/hacfl/static'
 )
 
 # ---------------------------------------------------
