@@ -19,8 +19,15 @@ class PrefixMiddleware(object):
         self.prefix = prefix
 
     def __call__(self, environ, start_response):
-        # Flaskに「私のルートURLは /flask です」と強制的に教える
+        # 1. リンク生成用： Flaskに「私のルートURLは /flask です」と教える
         environ['SCRIPT_NAME'] = self.prefix
+        
+        # 2. 【進化ポイント】 IISのマネをする機能
+        # もしリクエストの先頭に /flask が付いていたら、それを剥ぎ取る！
+        path_info = environ.get('PATH_INFO', '')
+        if path_info.startswith(self.prefix):
+            environ['PATH_INFO'] = path_info[len(self.prefix):]
+
         return self.app(environ, start_response)
 
 # メインFlaskサーバ
@@ -47,9 +54,6 @@ def debug_static_main():
         "app_static_url_path": app.static_url_path
     })
 
-@app.route('/')
-def root_check():
-    return "<h1>Flask Server is Alive!</h1>"
 
 # ----------------------------------------
 if __name__ == "__main__":
