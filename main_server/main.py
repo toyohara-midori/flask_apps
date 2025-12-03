@@ -14,13 +14,31 @@ from cart_result import cart_result_bp  # cart_result/__init__.py
 from hacfl import hacfl_bp
 
 class PrefixMiddleware(object):
+    #　以下は本番用？
+    # def __init__(self, app, prefix=''):
+    #     self.app = app
+    #     self.prefix = prefix
+
+    # def __call__(self, environ, start_response):
+    #     # Flaskに「私のルートURLは /flask です」と強制的に教える
+    #     environ['SCRIPT_NAME'] = self.prefix
+    #     return self.app(environ, start_response)
+
+    # 以下はデバッグ用？
     def __init__(self, app, prefix=''):
         self.app = app
         self.prefix = prefix
 
     def __call__(self, environ, start_response):
-        # Flaskに「私のルートURLは /flask です」と強制的に教える
+        # 1. リンク生成用： Flaskに「私のルートURLは /flask です」と教える
         environ['SCRIPT_NAME'] = self.prefix
+        
+        # 2. 【進化ポイント】 IISのマネをする機能
+        # もしリクエストの先頭に /flask が付いていたら、それを剥ぎ取る！
+        path_info = environ.get('PATH_INFO', '')
+        if path_info.startswith(self.prefix):
+            environ['PATH_INFO'] = path_info[len(self.prefix):]
+
         return self.app(environ, start_response)
 
 # メインFlaskサーバ
