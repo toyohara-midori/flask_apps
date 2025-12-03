@@ -14,7 +14,7 @@ from cart_result import cart_result_bp  # cart_result/__init__.py
 from hacfl import hacfl_bp
 
 class PrefixMiddleware(object):
-    #　以下は本番用？
+    #　本来の形だが、これだと個人のデバッグ環境でうまくいかなかった
     # def __init__(self, app, prefix=''):
     #     self.app = app
     #     self.prefix = prefix
@@ -24,7 +24,8 @@ class PrefixMiddleware(object):
     #     environ['SCRIPT_NAME'] = self.prefix
     #     return self.app(environ, start_response)
 
-    # 以下はデバッグ用？
+    # 以下は本来デバッグ用のようだが、こちらなら個人のデバッグ環境でも
+    # WEB-GSYS1でも正常に動作したので、こちらを採用する
     def __init__(self, app, prefix=''):
         self.app = app
         self.prefix = prefix
