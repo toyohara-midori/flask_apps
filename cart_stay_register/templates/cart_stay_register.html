@@ -84,15 +84,21 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// 店舗CD入力オートコンプリート用処理
-(async function() {
+
   const input = document.getElementById("cucd");
   const list = document.getElementById("autocompleteList");
+  const cucdListUrl = "{{ url_for('cart_stay_register.api_cucd_list') }}";
+  const chkCucdUrl = "{{ url_for('cart_stay_register.api_chk_cucd') }}";
+  const regCartUrl = "{{ url_for('cart_stay_register.api_register_cart') }}";
+  const chkDateUrl = "{{ url_for('cart_stay_register.api_check_date') }}";
+
+// 店舗CD入力オートコンプリート用処理
+(async function() {
   let allItems = [];
 
   // ① 初期ロードで候補一覧を取得
   try {
-    const res = await fetch("/flask/cart_stay_register/api/cucd_list");
+    const res = await fetch(cucdListUrl);
     if (res.ok) allItems = await res.json();
   } catch (e) {
     console.error("候補取得失敗:", e);
@@ -132,7 +138,7 @@
 
         // 店舗名確認API呼び出し
         try {
-          const res = await fetch("/flask/cart_stay_register/api/chk_cucd", {
+          const res = await fetch(chkCucdUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ cucd: cd })
@@ -191,7 +197,7 @@ dateInput.addEventListener("blur", async () => {
   }
 
   try {
-    const res = await fetch("/flask/cart_stay_register/api/check_date", {
+    const res = await fetch(chkDateUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cucd: cucdVal, idleDate: idleDate })
@@ -288,7 +294,7 @@ document.getElementById("btn-insert").addEventListener("click", async (e) => {
   const msgBox = document.getElementById("msg");
 
   try {
-    const res = await fetch("/flask/cart_stay_register/api/register_cart", {
+    const res = await fetch(regCartUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cucd, idleDate: date, cat1, cat2, cat3, cat4 })
@@ -374,7 +380,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           // APIチェック
           try {
-            const res = await fetch("/flask/cart_stay_register/api/chk_cucd", {
+            const res = await fetch(chkCucdUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ cucd: val })
@@ -467,7 +473,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           // DBチェック
           try {
-            const res = await fetch("/flask/cart_stay_register/api/check_date", {
+            const res = await fetch(chkDateUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ cucd: cucdVal, idleDate: dateVal })
