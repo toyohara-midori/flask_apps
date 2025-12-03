@@ -14,7 +14,7 @@ from cart_result import cart_result_bp  # cart_result/__init__.py
 from hacfl import hacfl_bp
 
 class PrefixMiddleware(object):
-    #　本来の形だが、これだと個人のデバッグ環境でうまくいかなかった
+    #　本来はこの形だけど、これだと個人のデバッグ環境でうまくいかなかった
     # def __init__(self, app, prefix=''):
     #     self.app = app
     #     self.prefix = prefix
