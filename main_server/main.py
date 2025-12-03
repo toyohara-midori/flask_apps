@@ -14,17 +14,6 @@ from cart_result import cart_result_bp  # cart_result/__init__.py
 from hacfl import hacfl_bp
 
 class PrefixMiddleware(object):
-    #　以下は本番用？
-    # def __init__(self, app, prefix=''):
-    #     self.app = app
-    #     self.prefix = prefix
-
-    # def __call__(self, environ, start_response):
-    #     # Flaskに「私のルートURLは /flask です」と強制的に教える
-    #     environ['SCRIPT_NAME'] = self.prefix
-    #     return self.app(environ, start_response)
-
-    # 以下はデバッグ用？
     def __init__(self, app, prefix=''):
         self.app = app
         self.prefix = prefix
