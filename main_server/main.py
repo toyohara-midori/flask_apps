@@ -4,7 +4,7 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))  # C:\
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-from flask import Flask
+from flask import Flask, request
 
 # サブアプリをインポート(Blueprint を読み込む)
 from autosupply_web import autosupply_bp  # autosupply_web/__init__.py
@@ -54,6 +54,14 @@ def debug_static_main():
         "app_static_url_path": app.static_url_path
     })
 
+#ドメインからグループ名を取得する　開発用に嘘データを流す　本番でも消さない
+@app.before_request
+def mock_login_info_for_debug():
+    # デバッグモード(F5)の時だけ、偽のユーザー名をセットする
+    if app.debug:
+        # まだ名前が入っていなければ、開発用の名前を入れる
+        if not request.environ.get('REMOTE_USER'):
+            request.environ['REMOTE_USER'] = 'MYCOMPANY\\Debug_User'
 
 # ----------------------------------------
 if __name__ == "__main__":

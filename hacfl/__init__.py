@@ -6,7 +6,7 @@ from common.hacfl_db_logic import (
     get_work_data_checked, 
     migrate_work_to_main
 )
-
+from common.ad_tool import is_user_in_group
 
 
 hacfl_bp = Blueprint(
@@ -16,6 +16,34 @@ hacfl_bp = Blueprint(
     static_folder='static',
     static_url_path='/hacfl/static'
 )
+#AD連携用
+@hacfl_bp.before_request
+def check_hacfl_permission():
+    user = request.remote_user
+    if not user: abort(401)
+
+    # ★許可したいグループをリスト（[]）でたくさん書く
+
+    allowed_groups = [
+        'Domain Admins',
+        'G-情報システム',
+        'G-商品部',
+        'G-商品部ディストリビューター'
+    ]
+    # --- 判定ロジック ---
+    # 「フラグ」を用意する（最初は 通行止め=False にしておく）
+    has_permission = False
+
+    # リストのグループを1つずつ順番に試す
+    for group in allowed_groups:
+        if is_user_in_group(user, group):
+            # もし入っていたら、フラグを OK=True にして、ループを抜ける
+            has_permission = True
+            break
+    
+    # 全部チェックし終わって、それでも False のままなら拒否
+    if not has_permission:
+        abort(403, description="ドメインでアクセスを許可されていません")
 
 # ---------------------------------------------------
 # 1. テンプレートCSVダウンロード機能
