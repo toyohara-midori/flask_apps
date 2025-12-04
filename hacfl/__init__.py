@@ -1,5 +1,5 @@
 """朝締め処理用一括CSV登録"""
-__author__ = "Fujinami Eiichiro"
+__author__ = "藤波英一郎"
 __version__ = "1.0.00 20251203"
 
 from flask import Blueprint, render_template, request, redirect, url_for, session, Response

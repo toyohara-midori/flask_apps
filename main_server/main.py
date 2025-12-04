@@ -55,16 +55,6 @@ def debug_static_main():
         "app_static_url_path": app.static_url_path
     })
 
-@app.route('/')
-def root_check():
-    return "<h1>Flask Server is Alive!</h1>"
-
-# ドメイン名を表示する実験用ページ
-@app.route('/whoami')
-def whoami():
-    user_name = request.remote_user
-    return f"<h1>こんにちは、あなたは {user_name} ですね！</h1>"
-
 # ----------------------------------------
 if __name__ == "__main__":
     #app.run(host="0.0.0.0", port=5000, debug=True)
