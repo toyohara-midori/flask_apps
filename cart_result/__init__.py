@@ -1,3 +1,6 @@
+__author__ = "豊原みどり"
+__vertion__ = "1.0.00_20251204"
+
 from flask import Blueprint
 
 cart_result_bp = Blueprint(
