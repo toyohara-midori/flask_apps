@@ -20,3 +20,6 @@ env/
 *.sln
 *.suo
 *.user
+
+# IIS設定ファイル
+Web.config

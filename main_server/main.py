@@ -4,7 +4,7 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))  # C:\
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-from flask import Flask
+from flask import Flask, request
 
 # サブアプリをインポート(Blueprint を読み込む)
 from autosupply_web import autosupply_bp  # autosupply_web/__init__.py
@@ -58,6 +58,12 @@ def debug_static_main():
 @app.route('/')
 def root_check():
     return "<h1>Flask Server is Alive!</h1>"
+
+# ドメイン名を表示する実験用ページ
+@app.route('/whoami')
+def whoami():
+    user_name = request.remote_user
+    return f"<h1>こんにちは、あなたは {user_name} ですね！</h1>"
 
 # ----------------------------------------
 if __name__ == "__main__":
