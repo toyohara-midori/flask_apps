@@ -3,16 +3,138 @@ import io
 import uuid
 from datetime import datetime, date, timedelta
 
+# 同階層の db_connection をインポート
 from .db_connection import get_connection
-
+from .Get_DB_Time import get_db_server_time
 TARGET_DB = "master"
 
-def parse_and_insert_work(file_storage):
+# ---------------------------------------------------------
+# 設定: モードごとのテーブルと稼働時間
+# ※時間は運用に合わせて変更してください
+# ---------------------------------------------------------
+MODE_CONFIG = {
+    'normal': {
+        'name': '通常予約',
+        'table': 'DBA.hacflr',
+        'start': '08:00',
+        'end':   '20:00'
+    },
+    'morning': {
+        'name': '当日朝締め',
+        'table': 'DBA.hacfl04', # 朝締め用テーブル
+        'start': '05:00',
+        'end':   '10:50'
+    }
+}
+
+def check_time_and_get_config(mode):
+    """
+    モードに応じた設定を返しつつ、稼働時間チェックを行う
+    （Get_DB_Time を使ってDB時間で判定）
+    """
+    config = MODE_CONFIG.get(mode)
+    if not config:
+        return False, "不正なモードです。", None
+
+    # ★汎用部品を使ってDB時間を取得
+    now = get_db_server_time()
+    current_time = now.time()
+    
+    # 時間チェック (Start <= Current <= End)
+    start_dt = datetime.strptime(config['start'], "%H:%M").time()
+    end_dt   = datetime.strptime(config['end'], "%H:%M").time()
+    
+    # ★開発中に時間制限を無効にしたい場合はここをコメントアウト
+    if not (start_dt <= current_time <= end_dt):
+        return False, f"{config['name']} の受付時間外です ({config['start']}～{config['end']})", None
+        
+    return True, "", config
+
+
+# =========================================================
+#  単発登録用ロジック
+# =========================================================
+def insert_single_record(mode, form_data):
+    """
+    画面からの単発入力を検証して登録する
+    """
+    # 1. 時間＆モードチェック
+    is_ok, msg, config = check_time_and_get_config(mode)
+    if not is_ok: return False, msg
+
+    # 2. 値取得
+    cucd = form_data.get('cucd', '').strip()
+    cocd = form_data.get('cocd', '').strip()
+    odsu = form_data.get('odsu', '').strip()
+    
+    oddt = form_data.get('oddt', '').strip()
+    if not oddt: oddt = None
+    
+    dldt = form_data.get('dldt', '').strip()
+    if not dldt: dldt = None
+
+    # 3. 簡易バリデーション
+    errors = []
+    if len(cucd) != 3: errors.append("店舗CDは3桁必須")
+    if len(cocd) != 8: errors.append("商品CDは8桁必須")
+    if not odsu.isdigit() or int(odsu) == 0: errors.append("発注数は1以上の数値")
+    
+    if errors: return False, " / ".join(errors)
+
+    # 4. 登録処理 (マスタから部門などを補完してINSERT)
+    conn = None
+    try:
+        conn = get_connection(TARGET_DB)
+        cursor = conn.cursor()
+        
+        target_table = config['table']
+        
+        sql = f"""
+            INSERT INTO {target_table} 
+            (edpno, type, cucd, cocd, bucd, odsu, oddt, dldt)
+            SELECT 
+                NULL,
+                '004',
+                ?,
+                ?,
+                (SELECT bucd FROM DBA.comf204 WHERE cocd = ?), -- マスタから部門取得
+                ?,
+                ?,
+                ?
+        """
+        # cocdは2回渡す(INSERT値用とSELECT条件用)
+        params = [cucd, cocd, cocd, odsu, oddt, dldt]
+        
+        cursor.execute(sql, params)
+        conn.commit()
+        
+        return True, f"店舗:{cucd} 商品:{cocd} を{config['name']}で登録しました。"
+
+    except Exception as e:
+        if conn: conn.rollback()
+        return False, f"DBエラー: {str(e)}"
+    finally:
+        if conn: conn.close()
+
+
+# =========================================================
+#  CSV一括登録用ロジック
+# =========================================================
+def parse_and_insert_work(file_storage, mode):
     """
     CSVを読み込み、ワークテーブルに登録する。
-    ★修正: CSVの行番号(line_num)をDBに保存するように変更
+    - 時間チェック
+    - 拡張子/サイズ/文字コードチェック
+    - ヘッダー自動判定
+    - 行番号管理
+    - CSV内重複チェック
+    - 桁数チェック
     """
-    # 1. 事前チェック
+    # 1. 時間チェック
+    is_ok, msg, config = check_time_and_get_config(mode)
+    if not is_ok: return False, msg, None
+
+    # 2. 事前チェック (ファイル)
     filename = file_storage.filename.lower()
     if not filename.endswith('.csv'):
         return False, "拡張子が .csv のファイルのみアップロード可能です。", None
@@ -44,7 +166,7 @@ def parse_and_insert_work(file_storage):
     except Exception as e:
         return False, f"CSV読込エラー: {str(e)}", None
 
-    # ヘッダー判定
+    # ヘッダー判定 (3列目の 'odsu' が数字でなければヘッダーとみなす)
     start_line_num = 1
     if len(rows) > 0:
         first_row = rows[0]
@@ -66,7 +188,7 @@ def parse_and_insert_work(file_storage):
         sql_cleanup = "DELETE FROM DBA.hacfl04_work WHERE oddt < ?"
         cursor.execute(sql_cleanup, (date.today(),))
 
-        # ★変更: line_num を追加
+        # インサートSQL (5項目 + 行番号)
         sql = """
             INSERT INTO DBA.hacfl04_work 
             (batch_id, line_num, cucd, cocd, odsu, oddt, dldt, err_msg)
@@ -84,6 +206,7 @@ def parse_and_insert_work(file_storage):
         for i, row in enumerate(rows, start=start_line_num):
             if len(row) < 5: row += [''] * (5 - len(row))
             
+            # --- 値取得 & 桁数チェック ---
             cucd_val = row[0].strip()
             if len(cucd_val) > 3:
                 return False, f"{i}行目: 店舗CDが長すぎます('{cucd_val}')", None
@@ -92,19 +215,19 @@ def parse_and_insert_work(file_storage):
             if len(cocd_val) > 8:
                 return False, f"{i}行目: 商品CDが長すぎます('{cocd_val}')", None
 
-            # 重複チェック
+            # CSV内重複チェック
             current_key = (cucd_val, cocd_val)
             if current_key in seen_keys:
                 return False, f"{i}行目: 店舗CD '{cucd_val}' 商品CD '{cocd_val}' が重複しています。", None
             seen_keys.add(current_key)
 
+            # --- 値変換 ---
             odsu_str = row[2].strip()
             odsu_val = int(odsu_str) if odsu_str.isdigit() else 0
 
             oddt_val = clean_val(row[3])
             dldt_val = clean_val(row[4])
 
-            # ★変更: パラメータに i (行番号) を追加
             params = [batch_id, i, cucd_val, cocd_val, odsu_val, oddt_val, dldt_val]
             cursor.execute(sql, params)
             insert_count += 1
@@ -141,6 +264,7 @@ def exec_db_validation(cursor, batch_id):
 
 
 def get_work_data_checked(batch_id):
+    """ バリデーション結果取得 """
     conn = None
     data_list = []
     has_global_error = False
@@ -154,7 +278,7 @@ def get_work_data_checked(batch_id):
         exec_db_validation(cursor, batch_id)
         conn.commit()
 
-        # ★変更: line_num を取得し、ORDER BY w.line_num (行番号順) に変更
+        # 行番号(line_num)順に取得
         sql = """
             SELECT 
                 w.line_num, w.cucd, w.cocd, w.odsu, w.oddt, w.dldt, w.err_msg, 
@@ -170,16 +294,12 @@ def get_work_data_checked(batch_id):
         rows = cursor.fetchall()
         
         for row in rows:
-            # line_num は row[0]
             line_num = row[0]
-            
-            # 以降のインデックスが1つずつずれます
-            # cucd=1, cocd=2, odsu=3, oddt=4, dldt=5, err=6
             db_err_msg = row[6] if row[6] else ""
             row_errors = []
             if db_err_msg: row_errors.append(db_err_msg)
 
-            # 全角チェック (cucd~dldt: index 1~5)
+            # 全角チェック
             all_text = "".join([str(col) for col in row[1:6] if col is not None])
             if not all(ord(c) < 128 for c in all_text):
                  row_errors.append(" [全角文字が含まれています]")
@@ -187,10 +307,8 @@ def get_work_data_checked(batch_id):
             if row_errors: has_global_error = True
 
             data_list.append({
-                "line_num": line_num,   # ★追加: これを表示に使う
-                "cols": row[1:6],       # データ部分
-                
-                # index修正: 7以降
+                "line_num": line_num,
+                "cols": row[1:6],
                 "item_name": row[7] if row[7] else "(-)", 
                 "kika":      row[8] if row[8] else "",    
                 "maker":     row[9] if row[9] else "",    
@@ -209,7 +327,14 @@ def get_work_data_checked(batch_id):
     return has_global_error, data_list
 
 
-def migrate_work_to_main(batch_id):
+def migrate_work_to_main(batch_id, mode):
+    """
+    【CSV本登録用】
+    modeを受け取り、INSERT先のテーブルを切り替える
+    """
+    is_ok, msg, config = check_time_and_get_config(mode)
+    if not is_ok: return False, msg, 0
+
     conn = None
     if not batch_id: return False, "BatchIDエラー", 0
     try:
@@ -220,8 +345,11 @@ def migrate_work_to_main(batch_id):
         count_row = cursor.fetchone()
         row_count = count_row[0] if count_row else 0
         
-        sql_copy = """
-            INSERT INTO DBA.hacfl04 
+        target_table = config['table']
+        
+        # マスタから部門を補完してINSERT
+        sql_copy = f"""
+            INSERT INTO {target_table} 
             (edpno, type, cucd, cocd, bucd, odsu, oddt, dldt)
             SELECT 
                 NULL, '004', w.cucd, w.cocd, c2.bucd, w.odsu, w.oddt, w.dldt
@@ -232,9 +360,60 @@ def migrate_work_to_main(batch_id):
         cursor.execute(sql_copy, (batch_id,))
         cursor.execute("DELETE FROM DBA.hacfl04_work WHERE batch_id = ?", (batch_id,))
         conn.commit()
+        
         return True, "本登録完了", row_count
     except Exception as e:
         if conn: conn.rollback()
         return False, f"本登録エラー: {str(e)}", 0
+    finally:
+        if conn: conn.close()
+
+def get_store_name_by_cd(cucd):
+    """ 店舗CDから店舗名を取得 """
+    conn = None
+    try:
+        conn = get_connection(TARGET_DB)
+        cursor = conn.cursor()
+        
+        sql = "SELECT nmkj FROM DBA.cusmf04 WHERE cucd = ?"
+        cursor.execute(sql, (cucd,))
+        row = cursor.fetchone()
+        
+        return row[0].strip() if row else None
+    except:
+        return None
+    finally:
+        if conn: conn.close()
+
+def get_product_info_by_cd(cocd):
+    """ 商品CDから詳細情報(品名, 規格, メーカー, 部門, 入数, B単)を取得 """
+    conn = None
+    try:
+        conn = get_connection(TARGET_DB)
+        cursor = conn.cursor()
+        
+        sql = """
+            SELECT 
+                c3.hnam_k, c3.kika_k, c3.mnam_p, -- 0,1,2
+                c2.bucd, c2.irsu, c2.btan      -- 3,4,5
+            FROM DBA.comf3 c3
+            LEFT JOIN DBA.comf204 c2 ON c3.cocd = c2.cocd
+            WHERE c3.cocd = ?
+        """
+        cursor.execute(sql, (cocd,))
+        row = cursor.fetchone()
+        
+        if row:
+            return {
+                "name": row[0] or "",
+                "kika": row[1] or "",
+                "maker": row[2] or "",
+                "bucd": row[3] or "",
+                "irsu": row[4] if row[4] is not None else "",
+                "btan": row[5] if row[5] is not None else ""
+            }
+        return None
+    except:
+        return None
     finally:
         if conn: conn.close()

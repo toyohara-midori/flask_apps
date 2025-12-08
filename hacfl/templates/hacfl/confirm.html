@@ -181,31 +181,32 @@
     <script>
         // エラー行のみ表示するフィルタ機能
         function toggleErrorRows(checkbox) {
+            // ... (ここは既存のまま) ...
             const rows = document.querySelectorAll('tbody tr');
             const showOnlyError = checkbox.checked;
+            // ... (省略) ...
+        }
 
-            rows.forEach(row => {
-                if (showOnlyError) {
-                    // エラークラスを持っていない行は隠す
-                    if (!row.classList.contains('row-error')) {
-                        row.style.display = 'none';
-                    } else {
-                        row.style.display = '';
-                    }
-                } else {
-                    // 全表示
-                    row.style.display = '';
-                }
-            });
+        // ★ここから追加: 二重送信防止用
+        function preventDoubleSubmit(form) {
+            const btn = document.getElementById('btn_register');
+            if (btn) {
+                btn.disabled = true;       // ボタン無効化
+                btn.innerText = "処理中..."; // 文言変更
+                btn.style.opacity = "0.6"; // 薄くする
+                btn.style.cursor = "not-allowed";
+            }
+            return true; // 送信続行
         }
     </script>
 </head>
 <body>
     <h2>登録内容チェック</h2>
 
+    <div style="background: #343a40; color: #fff; padding: 8px 15px; border-radius: 4px; margin-bottom: 20px; display: inline-block; font-weight: bold;">
+        対象業務：{{ mode_name }}
+    </div>
     {% if error_msg %}
-    <div class="alert alert-danger">{{ error_msg }}</div>
-    {% endif %}
 
     {% if has_error %}
     <div class="alert alert-danger">
@@ -293,8 +294,8 @@
 
     <div class="actions">
         {% if not has_error %}
-        <form method="post">
-            <button type="submit" class="btn-primary">確定して登録</button>
+        <form method="post" onsubmit="return preventDoubleSubmit(this);">
+            <button type="submit" class="btn-primary" id="btn_register">確定して登録</button>
         </form>
         {% endif %}
 

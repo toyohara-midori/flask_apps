@@ -2,139 +2,333 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>本部発注一括CSV登録</title>
+    <title>本部発注 登録画面</title>
     <style>
         body {
-            font-family: "Meiryo", "Hiragino Kaku Gothic ProN", sans-serif;
+            font-family: "Meiryo", sans-serif;
             background-color: #f4f6f9;
-            padding: 40px;
+            padding: 20px;
             color: #333;
         }
 
         .container {
-            max_width: 600px;
+            max_width: 700px;
             margin: 0 auto;
-            background-color: #fff;
-            padding: 40px;
+            background: #fff;
+            padding: 30px;
             border-radius: 8px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            text-align: center;
         }
 
         h2 {
-            margin-top: 0;
-            color: #343a40;
-            border-bottom: 2px solid #007bff;
-            display: inline-block;
-            padding-bottom: 10px;
+            text-align: center;
             margin-bottom: 30px;
+            border-bottom: 2px solid #ccc;
+            padding-bottom: 10px;
         }
 
-        .alert-danger {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+        /* モード選択エリア */
+        .mode-area {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 40px;
+            background: #eee;
             padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            text-align: left;
+            border-radius: 8px;
         }
 
-        .upload-area {
-            border: 2px dashed #ced4da;
-            border-radius: 6px;
-            padding: 40px 20px;
-            background-color: #f8f9fa;
-            margin-bottom: 25px;
-            transition: background-color 0.3s;
+        .mode-label {
+            font-size: 1.2em;
+            font-weight: bold;
+            padding: 10px 30px;
+            border-radius: 30px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            opacity: 0.6;
         }
 
-            .upload-area:hover {
-                background-color: #e9ecef;
-            }
+        input[type="radio"] {
+            display: none;
+        }
 
-        input[type="file"] {
+        /* 選択時の色変化 */
+        #rb_normal:checked + .mode-label {
+            background: #007bff;
+            color: #fff;
+            opacity: 1;
+            box-shadow: 0 4px 10px rgba(0,123,255,0.4);
+        }
+
+        #rb_morning:checked + .mode-label {
+            background: #dc3545;
+            color: #fff;
+            opacity: 1;
+            box-shadow: 0 4px 10px rgba(220,53,69,0.4);
+        }
+
+        /* セクション */
+        .section-box {
+            border: 1px solid #ddd;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .section-title {
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: #fff;
+            padding: 0 10px;
+            font-weight: bold;
+            color: #555;
             font-size: 1.1em;
         }
 
-        button {
-            background-color: #007bff;
-            color: white;
-            padding: 12px 40px;
-            font-size: 1.2em;
+        /* フォーム部品 */
+        label {
+            display: block;
             font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            flex: 1;
+        }
+
+        input[type="text"], input[type="number"], input[type="date"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            font-weight: bold;
+            color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: background-color 0.2s;
+            transition: 0.3s;
         }
 
-            button:hover {
-                background-color: #0069d9;
-            }
+        .btn-submit {
+            background-color: #555;
+        }
+        /* JSで色が変わる */
 
-        .template-area {
-            margin-top: 30px;
-            border-top: 1px dashed #ccc;
-            padding-top: 20px;
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
         }
 
-        .dl-btn {
-            background-color: #28a745;
-            font-size: 1em;
-            padding: 8px 20px;
-            display: inline-block;
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
         }
 
-            .dl-btn:hover {
-                background-color: #218838;
-            }
+        /* ★追加: 情報表示用のスタイル (店名などを表示する文字) */
+        .info-display {
+            font-size: 0.85em;
+            color: #0056b3;
+            margin-top: 4px;
+            min-height: 1.2em;
+        }
 
-        .note {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 20px;
-            text-align: left;
+        .info-error {
+            color: #dc3545;
         }
     </style>
+
+    <script>
+        // --- 1. モード切替の表示制御 ---
+        function updateMode() {
+            // 選択されているモードを取得
+            let mode = "";
+            if(document.getElementById('rb_normal').checked) mode = "normal";
+            else mode = "morning";
+
+            // 隠しフィールドにセット
+            document.getElementById('hidden_mode_single').value = mode;
+            document.getElementById('hidden_mode_csv').value = mode;
+
+            // ボタンの色と文字を変える演出
+            const btns = document.querySelectorAll('.btn-submit');
+            btns.forEach(btn => {
+                // 文言のリセット（重複追加防止）
+                let baseText = btn.innerText.replace("（当日朝締め）", "").replace("（通常予約）", "");
+
+                if(mode === "normal") {
+                    btn.style.backgroundColor = "#007bff";
+                    btn.innerText = baseText + "（通常予約）";
+                } else {
+                    btn.style.backgroundColor = "#dc3545";
+                    btn.innerText = baseText + "（当日朝締め）";
+                }
+            });
+        }
+
+        // --- 2. 店舗名取得 (AJAX) ---
+        async function fetchStoreName(input) {
+            const cucd = input.value.trim();
+            const disp = document.getElementById('disp_store_name');
+
+            // 3桁未満ならクリアして終了
+            if (cucd.length !== 3) {
+                disp.innerText = "";
+                return;
+            }
+
+            try {
+                // サーバーに問い合わせ
+                const res = await fetch(`{{ url_for('hacfl.api_get_store_name') }}?cucd=${cucd}`);
+                const data = await res.json();
+
+                if (data.found) {
+                    disp.innerText = data.name;
+                    disp.className = "info-display";
+                } else {
+                    disp.innerText = "マスタに存在しません";
+                    disp.className = "info-display info-error";
+                }
+            } catch (e) {
+                console.error(e);
+                disp.innerText = "通信エラー";
+            }
+        }
+
+        // --- 3. 商品情報取得 (AJAX) ---
+        async function fetchProductInfo(input) {
+            const cocd = input.value.trim();
+            const dispName = document.getElementById('disp_prod_name');
+            const dispDetail = document.getElementById('disp_prod_detail');
+
+            // 8桁未満ならクリアして終了
+            if (cocd.length !== 8) {
+                dispName.innerText = "";
+                dispDetail.innerText = "";
+                return;
+            }
+
+            try {
+                const res = await fetch(`{{ url_for('hacfl.api_get_product_info') }}?cocd=${cocd}`);
+                const data = await res.json();
+
+                if (data.found) {
+                    const i = data.info;
+                    dispName.innerText = i.name;
+                    dispDetail.innerText = `規格:${i.kika} / ${i.maker} / 入数:${i.irsu} / B単:${i.btan}`;
+
+                    dispName.className = "info-display";
+                    dispDetail.className = "info-display";
+                } else {
+                    dispName.innerText = "マスタに存在しません";
+                    dispName.className = "info-display info-error";
+                    dispDetail.innerText = "";
+                }
+            } catch (e) {
+                console.error(e);
+                dispName.innerText = "通信エラー";
+            }
+        }
+
+        // ページ読み込み時に実行
+        window.onload = updateMode;
+    </script>
 </head>
 <body>
 
     <div class="container">
-        <h2>本部発注一括CSV登録</h2>
+        <h2>本部発注 登録画面</h2>
 
-        {% if error %}
-        <div class="alert-danger">
-            <strong>エラー：</strong> {{ error }}
-        </div>
-        {% endif %}
+        {% if error %} <div class="alert-error">{{ error }}</div> {% endif %}
+        {% if msg %} <div class="alert-success">{{ msg }}</div> {% endif %}
 
-        <form method="post" enctype="multipart/form-data">
-            <div class="upload-area">
-                <p style="margin-top:0; font-weight:bold; color:#555;">CSVファイルを選択してください</p>
-                <input type="file" name="csv_file" accept=".csv" required>
-            </div>
+        <div class="mode-area">
+            <input type="radio" name="mode_select" id="rb_normal" checked onchange="updateMode()">
+            <label for="rb_normal" class="mode-label">通常予約</label>
 
-            <button type="submit">チェックする</button>
-        </form>
-
-        <div class="template-area">
-            <a href="{{ url_for('hacfl.download_template') }}" style="text-decoration:none;">
-                <button type="button" class="dl-btn">
-                    📥 雛形CSVをダウンロード
-                </button>
-            </a>
+            <input type="radio" name="mode_select" id="rb_morning" onchange="updateMode()">
+            <label for="rb_morning" class="mode-label">当日朝締め</label>
         </div>
 
-        <div class="note">
-            <ul>
-                <li>情報システム部に依頼する際のCSVファイルが元になっています。</li>
-                <li>ファイル形式: <strong>.csv</strong> (カンマ区切り)</li>
-                <li>サイズ上限: 10MB</li>
-                <li>一度ワークテーブルに取り込み、内容チェック後に本登録されます。</li>
-            </ul>
+        <div class="section-box">
+            <span class="section-title">単発データ登録</span>
+            <form method="post">
+                <input type="hidden" name="action_type" value="single">
+                <input type="hidden" name="mode" id="hidden_mode_single">
+
+                <div class="form-row">
+                    <div class="form-group" style="flex: 0 0 30%;">
+                        <label>店舗CD</label>
+                        <input type="text" name="cucd" maxlength="3" required placeholder="111" onblur="fetchStoreName(this)">
+                        <div id="disp_store_name" class="info-display"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>商品CD</label>
+                        <input type="text" name="cocd" maxlength="8" required placeholder="12345678" onblur="fetchProductInfo(this)">
+                        <div id="disp_prod_name" class="info-display" style="font-weight:bold;"></div>
+                        <div id="disp_prod_detail" class="info-display" style="color:#666;"></div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>発注数</label>
+                        <input type="number" name="odsu" required>
+                    </div>
+                    <div class="form-group">
+                        <label>発注日(任意)</label>
+                        <input type="date" name="oddt">
+                    </div>
+                    <div class="form-group">
+                        <label>納品日(任意)</label>
+                        <input type="date" name="dldt">
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit">登録する</button>
+            </form>
         </div>
+
+        <div class="section-box" style="margin-bottom:0;">
+            <span class="section-title">CSV一括登録</span>
+            <form method="post" enctype="multipart/form-data">
+                <input type="hidden" name="action_type" value="csv">
+                <input type="hidden" name="mode" id="hidden_mode_csv">
+
+                <div style="padding: 20px; background:#f8f9fa; border:2px dashed #ccc; text-align:center; margin-bottom:15px;">
+                    <input type="file" name="csv_file" accept=".csv" required>
+                </div>
+
+                <button type="submit" class="btn-submit">チェックへ進む</button>
+
+                <div style="text-align:right; margin-top:10px;">
+                    <a href="{{ url_for('hacfl.download_template') }}" style="font-size:0.9em; color:#007bff;">
+                        📥 雛形CSVダウンロード
+                    </a>
+                </div>
+            </form>
+        </div>
+
     </div>
 
 </body>
