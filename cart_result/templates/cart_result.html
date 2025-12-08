@@ -14,8 +14,7 @@
   </div>
   <div class="d-flex gap-3">
     <!-- 今年度ボタン -->
-    <form action="{{ url_for('cart_result.export_excel') }}" method="post">
-      <input type="hidden" name="year_type" value="current">
+    <form action="{{ url_for('cart_result.export_excel_zip') }}" method="post">
       <button type="submit" class="btn btn-primary px-4">
         今年度Excel出力
       </button>

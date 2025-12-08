@@ -48,12 +48,18 @@
                 <div class="col-sm-1">
                     <input type="text" class="form-control text-end" name="kubun1" id="kubun1" value="{{ kubun1 or '' }}">
                 </div>
+                <div class="col-sm-4 d-flex align-items-center">
+                    <span id="kubun1_desc" class="text-muted small"></span>
+                </div>
             </div>
 
             <div class="row mb-3">
                 <label class="col-sm-1 col-form-label">区分2</label>
                 <div class="col-sm-1">
                     <input type="text" class="form-control text-end" name="kubun2" id="kubun2" value="{{ kubun2 or '' }}">
+                </div>
+                <div class="col-sm-4 d-flex align-items-center">
+                    <span id="kubun2_desc" class="text-muted small"></span>
                 </div>
             </div>
 
@@ -62,12 +68,18 @@
                 <div class="col-sm-1">
                     <input type="text" class="form-control text-end" name="kubun3" id="kubun3" value="{{ kubun3 or '' }}">
                 </div>
+                <div class="col-sm-4 d-flex align-items-center">
+                    <span id="kubun3_desc" class="text-muted small"></span>
+                </div>
             </div>
 
             <div class="row mb-3">
                 <label class="col-sm-1 col-form-label">区分4</label>
                 <div class="col-sm-1">
                     <input type="text" class="form-control text-end" name="kubun4" id="kubun4" value="{{ kubun4 or '' }}">
+                </div>
+                <div class="col-sm-4 d-flex align-items-center">
+                    <span id="kubun4_desc" class="text-muted small"></span>
                 </div>
             </div>
 
@@ -175,6 +187,26 @@
     }
   });
 })();
+
+// 区分説明を取得してセット
+async function loadCategoryDescriptions() {
+  try {
+    const res = await fetch("{{ url_for('cart_stay_register.api_category_list') }}");
+    if (!res.ok) return;
+
+    const data = await res.json();  
+    // data = { "1": "区分1の説明", "2": "...", ... }
+
+    document.getElementById("kubun1_desc").textContent = data["1"] || "";
+    document.getElementById("kubun2_desc").textContent = data["2"] || "";
+    document.getElementById("kubun3_desc").textContent = data["3"] || "";
+    document.getElementById("kubun4_desc").textContent = data["4"] || "";
+
+  } catch (e) {
+    console.error("区分説明取得失敗:", e);
+  }
+}
+document.addEventListener("DOMContentLoaded", loadCategoryDescriptions);
 
 // メッセージ表示処理
 function showMsg(text, type="info") {

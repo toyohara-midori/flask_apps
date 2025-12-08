@@ -124,20 +124,27 @@ def apply_borders(ws, col_start, col_end):
             )
 
     # ⑤ 日曜→月曜の境界に medium 線
-    day_count = col_end - col_start + 1
+    # ⑤ 日曜→月曜の境界に太線（曜日ベース）
+    # days は build_base_layout / build_base_layout_period の戻り値を利用
+    # → apply_borders の引数に days を追加していないので、
+    #    ここで date_obj を取得する必要がある
 
-    for i in range(day_count):
-        if i % 7 == 0:  # 月曜列
-            col = col_start + i
-            if col > col_start:
-                for row in range(4, max_row + 1):
-                    cell = ws.cell(row=row, column=col)
-                    cell.border = Border(
-                        left=medium,
-                        right=cell.border.right,
-                        top=cell.border.top,
-                        bottom=cell.border.bottom,
-                    )
+    # ★ days は ws 上の 4行目（mm/dd）の値から取得できる
+    #   （レイアウト生成時に書き込んだ日付セルを参照する）
+    for col in range(col_start, col_end + 1):
+        date_cell = ws.cell(row=4, column=col).value
+
+        # 日付セルが date 型であることを確認
+        if hasattr(date_cell, "weekday") and date_cell.weekday() == 0:
+            # ここが月曜日の列 → 左側に太線
+            for row in range(4, max_row + 1):
+                cell = ws.cell(row=row, column=col)
+                cell.border = Border(
+                    left=thick,
+                    right=cell.border.right,
+                    top=cell.border.top,
+                    bottom=cell.border.bottom
+                )
 
     # ★ 最終：右枠の太線をもう一度上書きして復活させる
     for row in range(3, max_row + 1):

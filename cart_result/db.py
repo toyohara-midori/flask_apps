@@ -92,20 +92,20 @@ def fetch_cart_stay_all(year: int):
     {"CUCD_YYYY-MM-DD": {"cat1": x, "cat2": y, ...}} の辞書形式で返す。
     """
 
-    # ① まず年度カレンダーから「開始日・終了日」を決める
-    days = get_week_calendar(year)  # [(weekno, date_obj), ...]
+    # ① 年度カレンダー取得（開始日・終了日）
+    days = get_week_calendar(year)
     if not days:
         return {}
 
-    start_date = days[0][1]   # 一番最初の日付
-    end_date   = days[-1][1]  # 一番最後の日付
+    start_date = days[0][1]
+    end_date   = days[-1][1]
 
     with get_connection("SQLS08-14") as conn:
         cur = conn.cursor()
 
-        # ② idleDate を年度の日付範囲で絞る（←ここがポイント）
+        # ② 新テーブル構造に対応した SELECT（catcd / count）
         sql = """
-            SELECT cucd, idleDate, cat1, cat2, cat3, cat4
+            SELECT cucd, idleDate, catcd, count
             FROM CartStayCount
             WHERE idleDate BETWEEN ? AND ?
         """
@@ -124,12 +124,14 @@ def fetch_cart_stay_all(year: int):
         ymd = idle_date.strftime("%Y-%m-%d")
         key = f"{cucd}_{ymd}"
 
-        data_dict[key] = {
-            "cat1": row.cat1,
-            "cat2": row.cat2,
-            "cat3": row.cat3,
-            "cat4": row.cat4,
-        }
+        # dict が未作成なら初期化
+        if key not in data_dict:
+            data_dict[key] = {"cat1": 0, "cat2": 0, "cat3": 0, "cat4": 0}
+
+        # catcd → cat1〜cat4 にセット
+        catcd = int(row.catcd)
+        if 1 <= catcd <= 4:
+            data_dict[key][f"cat{catcd}"] = row.count
 
     return data_dict
 
@@ -137,34 +139,85 @@ def fetch_cart_stay_all(year: int):
 def fetch_total_for_date_and_kbn(target_date: date, kbn_no):
     """
     指定日・区分の合計値を CartStayCount から取得する。
-      kbn_no: 1〜4 → cat1〜cat4
-              "total" → cat1〜cat4 の合計
+      kbn_no: 1〜4 → catcdごとの合計
+              "total" → catcd 1〜4 の合計
     第1週の、前週差分を計算する時に使う。
     """
     with get_connection("SQLS08-14") as conn:
         cur = conn.cursor()
 
         if kbn_no == "total":
+            # catcd 1〜4 の全部
             sql = """
-                SELECT
-                    COALESCE(SUM(cat1),0)
-                  + COALESCE(SUM(cat2),0)
-                  + COALESCE(SUM(cat3),0)
-                  + COALESCE(SUM(cat4),0)
+                SELECT COALESCE(SUM(count), 0)
                 FROM CartStayCount
                 WHERE idleDate = ?
+                  AND catcd IN (1, 2, 3, 4)
             """
             cur.execute(sql, (target_date,))
         else:
-            # kbn_no は 1〜4 を想定
-            col = f"cat{kbn_no}"
-            sql = f"""
-                SELECT COALESCE(SUM({col}),0)
+            # kbn_no は 1〜4
+            sql = """
+                SELECT COALESCE(SUM(count), 0)
                 FROM CartStayCount
                 WHERE idleDate = ?
+                  AND catcd = ?
             """
-            cur.execute(sql, (target_date,))
+            cur.execute(sql, (target_date, kbn_no))
 
         row = cur.fetchone()
         return row[0] or 0
+
+# ============================================================
+# 2週間データ専用の fetch 関数
+# ============================================================
+def fetch_cart_stay_period(start_date, end_date):
+    with get_connection("SQLS08-14") as conn:
+        cur = conn.cursor()
+        sql = """
+            SELECT cucd, idleDate, catcd, count
+            FROM CartStayCount
+            WHERE idleDate BETWEEN ? AND ?
+        """
+        cur.execute(sql, (start_date, end_date))
+        rows = cur.fetchall()
+
+    data_dict = {}
+    for r in rows:
+        cucd = str(r.cucd).strip()
+        d = r.idleDate.date() if hasattr(r.idleDate, "date") else r.idleDate
+        key = f"{cucd}_{d:%Y-%m-%d}"
+
+        if key not in data_dict:
+            data_dict[key] = {"cat1": 0, "cat2": 0, "cat3": 0, "cat4": 0}
+
+        data_dict[key][f"cat{r.catcd}"] = r.count
+
+    return data_dict
+
+# ============================================================
+# 区分の内容を取得する関数
+# ============================================================
+def get_category_titles():
+    """
+    CartCategory テーブルから catcd, catname を読み取り、
+    {1: "区分1：○○", 2: "区分2：○○", ...} の形式で返す
+    """
+    with get_connection("SQLS08-14") as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT catcd, catname
+            FROM CartCategory
+            ORDER BY catcd
+        """)
+        rows = cur.fetchall()
+
+    title_map = {}
+
+    for r in rows:
+        cd = int(r.catcd)
+        name = str(r.catname).strip()
+        title_map[cd] = f"区分{cd}：{name}"
+
+    return title_map
 

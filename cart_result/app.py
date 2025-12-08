@@ -13,7 +13,8 @@ from . import cart_result_bp
 # 共通ロジック
 from common.cucd_logic import get_cucd_master_tuple
 from .db import fetch_cart_stay_all, get_week_calendar
-from .db import fetch_total_for_date_and_kbn
+from .db import fetch_total_for_date_and_kbn, fetch_cart_stay_period
+from .db import get_category_titles
 
 # 既存のフォーマット系
 from .format_common import (
@@ -399,6 +400,59 @@ def append_summary_rows(ws, days, col_start, col_end, year, kbn_no):
             bottom=cell.border.bottom,
             left=cell.border.left,
         )
+
+# ============================================================
+# 共通 Excel 生成関数
+# ============================================================
+def build_excel_workbook(year, shop_master, data_dict):
+    wb = Workbook()
+    base_ws = wb.active
+    base_ws.title = "区分1"
+
+    # 区分名
+    title_map = get_category_titles()
+
+    # レイアウト作成
+    days, col_start, col_end = build_base_layout(base_ws, year, shop_master)
+
+    # タイトル
+    base_ws["B2"] = title_map[1]
+    base_ws["B2"].font = Font(name="Meiryo UI", size=14, bold=True)
+
+    unit_cell = base_ws.cell(row=2, column=col_end - 1)
+    unit_cell.value = "単位：台"
+    unit_cell.font = Font(name="Meiryo UI", size=11)
+    unit_cell.alignment = Alignment(horizontal="center")
+
+    # コピーして各シート作成
+    ws2 = duplicate_sheet(wb, base_ws, "区分2")
+    ws3 = duplicate_sheet(wb, base_ws, "区分3")
+    ws4 = duplicate_sheet(wb, base_ws, "区分4")
+    ws_total = duplicate_sheet(wb, base_ws, "滞留カゴ車台数実績表")
+
+    ws2["B2"] = title_map[2]
+    ws3["B2"] = title_map[3]
+    ws4["B2"] = title_map[4]
+    ws_total["B2"] = "滞留カゴ車台数実績表"
+
+    # 値の埋め込み
+    fill_values(base_ws, days, shop_master, data_dict, 1)
+    append_summary_rows(base_ws, days, col_start, col_end - 1, year, 1)
+
+    fill_values(ws2, days, shop_master, data_dict, 2)
+    append_summary_rows(ws2, days, col_start, col_end - 1, year, 2)
+
+    fill_values(ws3, days, shop_master, data_dict, 3)
+    append_summary_rows(ws3, days, col_start, col_end - 1, year, 3)
+
+    fill_values(ws4, days, shop_master, data_dict, 4)
+    append_summary_rows(ws4, days, col_start, col_end - 1, year, 4)
+
+    fill_values(ws_total, days, shop_master, data_dict, "total")
+    append_summary_rows(ws_total, days, col_start, col_end - 1, year, "total")
+
+    return wb
+
 # ============================================================
 # ④ ルート
 # ============================================================
@@ -416,12 +470,7 @@ def export_excel():
     today = date.today()
     year = today.year if year_type == "current" else today.year - 1
 
-    title_map = {
-        1: "区分1：水　（ピュアの森500ML・2L、安曇野の水、尚仁沢天然水）",
-        2: "区分2：飲料（22部門小分類50～59）、26部門",
-        3: "区分3：食品（飲料を除く22部門、23部門）",
-        4: "区分4：雑貨（水、飲料、食品以外）",
-    }
+    title_map = get_category_titles()
 
     # 店舗マスター（タプル形式）
     shop_master = get_cucd_master_tuple()
@@ -476,6 +525,204 @@ def export_excel():
     wb.save(temp_path)
 
     return send_file(temp_path, as_attachment=True)
+
+# ============================================================
+# Excel出力（zipで今年度と2週間分の2ファイル出力版）
+# ============================================================
+@cart_result_bp.route("/export_excel_zip", methods=["POST"])
+def export_excel_zip():
+    today = date.today()
+    ymd = today.strftime("%Y%m%d")
+    year = today.year  # 今年度出力
+
+    # 店舗マスター
+    shop_master = get_cucd_master_tuple()
+
+    # -------------------------
+    # ① 年度版 Excel を生成
+    # -------------------------
+    data_full = fetch_cart_stay_all(year)
+    wb_full = build_excel_workbook(year, shop_master, data_full)
+    buf_full = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    wb_full.save(buf_full.name)
+
+    # -------------------------
+    # ② 2週間版 Excel を生成
+    # -------------------------
+    start_2w = today - timedelta(days=13)
+    end_2w = today
+
+    data_2w = fetch_cart_stay_period(start_2w, end_2w)
+    wb_2w = create_excel_two_weeks()
+    fname_2w = f"2週間滞留カゴ車台数実績表({ymd}).xlsx"
+    buf_2w = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    wb_2w.save(buf_2w.name)
+
+    # -------------------------
+    # ③ ZIP 作成
+    # -------------------------
+    zip_path = tempfile.NamedTemporaryFile(delete=False, suffix=".zip").name
+    import zipfile
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(buf_full.name, arcname=f"{year}年度_滞留カゴ車台数実績表.xlsx")
+        z.write(buf_2w.name, arcname=fname_2w)
+
+    return send_file(zip_path,
+                     as_attachment=True,
+                     download_name=f"滞留カゴ車集計_{year}年度版＋2週間版_{ymd}.zip")
+
+# ============================================================
+# Excel出力（2週間ファイル）
+# ============================================================
+def build_base_layout_period(ws, start_date, end_date, shop_master):
+    """
+    指定期間（start_date〜end_date）のみのレイアウトを作る。
+    ・週番号（必要な分だけ）
+    ・日付（期間の分だけ）
+    ・曜日
+    ・店舗CD・店舗名
+    """
+    from common.db_connection import get_connection
+    
+    # --------------------------
+    # ① 期間内の日付リスト作成
+    # --------------------------
+    cur_date = start_date
+    days = []
+
+    with get_connection("SQLS08-14") as conn:
+        cur = conn.cursor()
+
+        while cur_date <= end_date:
+            cur.execute("""
+                SELECT weekno 
+                FROM dba.weekno2 
+                WHERE ? BETWEEN date_s AND date_e
+            """, (cur_date,))
+            row = cur.fetchone()
+            weekno = row[0] if row else 0   # 取れないことは基本ない
+            
+            days.append((weekno, cur_date))
+            cur_date += timedelta(days=1)
+
+    # --------------------------
+    # ② カレンダー描画（年度版と同じ方式）
+    # --------------------------
+    col_start = 4
+    col_idx = col_start
+    prev_weekno = None
+    week_start_col = col_start
+
+    for (weekno, date_obj) in days:
+        # 週番号セル結合
+        if weekno != prev_weekno:
+            if prev_weekno is not None:
+                ws.merge_cells(start_row=3, start_column=week_start_col,
+                               end_row=3, end_column=col_idx - 1)
+                ws.cell(row=3, column=week_start_col).value = f"第{prev_weekno}週"
+                ws.cell(row=3, column=week_start_col).alignment = Alignment(horizontal="center")
+            week_start_col = col_idx
+            prev_weekno = weekno
+
+        # 日付
+        c_date = ws.cell(row=4, column=col_idx)
+        c_date.value = date_obj
+        c_date.number_format = "mm/dd"
+        c_date.alignment = Alignment(horizontal="center")
+
+        # 曜日
+        weekday = ["月", "火", "水", "木", "金", "土", "日"][date_obj.weekday()]
+        c = ws.cell(row=5, column=col_idx)
+        c.value = weekday
+        c.alignment = Alignment(horizontal="center")
+
+        col_idx += 1
+
+    # 最後の週番号セル結合
+    ws.merge_cells(start_row=3, start_column=week_start_col,
+                   end_row=3, end_column=col_idx - 1)
+    ws.cell(row=3, column=week_start_col).value = f"第{prev_weekno}週"
+    ws.cell(row=3, column=week_start_col).alignment = Alignment(horizontal="center")
+
+    # 列幅
+    for c in range(col_start, col_idx):
+        ws.column_dimensions[get_column_letter(c)].width = 6
+
+    # 見出し
+    ws["B5"] = "店舗CD"
+    ws["C5"] = "店舗名"
+    ws.freeze_panes = "D6"
+
+    # 店舗一覧
+    row = 6
+    for cucd, name in shop_master:
+        if cucd == "B78":
+            continue
+        ws.cell(row=row, column=2).value = cucd
+        ws.cell(row=row, column=3).value = name
+        row += 1
+
+    # 共通フォーマット適用
+    apply_common_format(ws, col_start, col_idx - 1)
+    apply_borders(ws, col_start, col_idx - 1)
+    apply_header_color(ws, col_start, col_idx - 1)
+    apply_font_style(ws)
+    apply_sunday_red(ws, col_start, col_idx - 1, days)
+
+    return days, col_start, col_idx
+
+def create_excel_two_weeks():
+    today = date.today()
+    start_2w = today - timedelta(days=13)
+    end_2w   = today
+
+    # 店舗マスター
+    shop_master = get_cucd_master_tuple()
+
+    # 2週間分のデータ
+    data_dict = fetch_cart_stay_period(start_2w, end_2w)
+
+    # Excelブック生成
+    wb = Workbook()
+    ws_base = wb.active
+    ws_base.title = "区分1"
+
+    # ★ 2週間版のレイアウト（列が14列だけ）
+    days, col_start, col_end = build_base_layout_period(ws_base, start_2w, end_2w, shop_master)
+
+    # 区分タイトル
+    title_map = get_category_titles()
+
+    ws_base["B2"] = title_map[1]
+
+    # シート複製（区分2〜4 & 合計）
+    ws2 = duplicate_sheet(wb, ws_base, "区分2")
+    ws3 = duplicate_sheet(wb, ws_base, "区分3")
+    ws4 = duplicate_sheet(wb, ws_base, "区分4")
+    ws_total = duplicate_sheet(wb, ws_base, "滞留カゴ車台数実績表")
+
+    ws2["B2"] = title_map[2]
+    ws3["B2"] = title_map[3]
+    ws4["B2"] = title_map[4]
+    ws_total["B2"] = "滞留カゴ車台数実績表"
+
+    # 値埋め込み
+    fill_values(ws_base, days, shop_master, data_dict, 1)
+    append_summary_rows(ws_base, days, col_start, col_end - 1, None, 1)
+
+    fill_values(ws2, days, shop_master, data_dict, 2)
+    append_summary_rows(ws2, days, col_start, col_end - 1, None, 2)
+
+    fill_values(ws3, days, shop_master, data_dict, 3)
+    append_summary_rows(ws3, days, col_start, col_end - 1, None, 3)
+
+    fill_values(ws4, days, shop_master, data_dict, 4)
+    append_summary_rows(ws4, days, col_start, col_end - 1, None, 4)
+
+    fill_values(ws_total, days, shop_master, data_dict, "total")
+    append_summary_rows(ws_total, days, col_start, col_end - 1, None, "total")
+
+    return wb
 
 # ===============================
 # データ照会画面（GET）
