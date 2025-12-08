@@ -6,22 +6,22 @@ from datetime import datetime, date, timedelta
 # 同階層の db_connection をインポート
 from .db_connection import get_connection
 from .Get_DB_Time import get_db_server_time
+
 TARGET_DB = "master"
 
 # ---------------------------------------------------------
 # 設定: モードごとのテーブルと稼働時間
-# ※時間は運用に合わせて変更してください
 # ---------------------------------------------------------
 MODE_CONFIG = {
     'normal': {
-        'name': '通常予約',
-        'table': 'DBA.hacflr',
+        'name': '通常予約',       # 夜締め予約発注
+        'table': 'DBA.hacflr',   # ★夜は hacflr
         'start': '08:00',
         'end':   '20:00'
     },
     'morning': {
-        'name': '当日朝締め',
-        'table': 'DBA.hacfl04', # 朝締め用テーブル
+        'name': '当日朝締め',     # 朝締め発注
+        'table': 'DBA.hacfl04',  # ★朝は hacfl04
         'start': '05:00',
         'end':   '10:50'
     }
@@ -79,6 +79,24 @@ def insert_single_record(mode, form_data):
     if len(cocd) != 8: errors.append("商品CDは8桁必須")
     if not odsu.isdigit() or int(odsu) == 0: errors.append("発注数は1以上の数値")
     
+    # ★追加: 発注日(oddt)のモード別チェック
+    if oddt:
+        try:
+            input_date = datetime.strptime(oddt, '%Y-%m-%d').date()
+            # DB時間から「今日」を取得
+            now = get_db_server_time()
+            today = now.date()
+
+            if input_date < today:
+                errors.append(f"発注日に過去の日付は指定できません({oddt})")
+            
+            # 朝締めは「当日」以外不可
+            if mode == 'morning' and input_date != today:
+                errors.append(f"当日朝締めでは、当日以外の発注日は指定できません")
+                
+        except ValueError:
+            errors.append("発注日の形式が不正です")
+
     if errors: return False, " / ".join(errors)
 
     # 4. 登録処理 (マスタから部門などを補完してINSERT)
@@ -123,12 +141,6 @@ def insert_single_record(mode, form_data):
 def parse_and_insert_work(file_storage, mode):
     """
     CSVを読み込み、ワークテーブルに登録する。
-    - 時間チェック
-    - 拡張子/サイズ/文字コードチェック
-    - ヘッダー自動判定
-    - 行番号管理
-    - CSV内重複チェック
-    - 桁数チェック
     """
     # 1. 時間チェック
     is_ok, msg, config = check_time_and_get_config(mode)
@@ -242,12 +254,20 @@ def parse_and_insert_work(file_storage, mode):
         if conn: conn.close()
 
 
-def exec_db_validation(cursor, batch_id):
+def exec_db_validation(cursor, batch_id, mode):
     """ SQLによる一括チェック """
-    today_str = date.today().strftime('%Y-%m-%d')
-    limit_date = date.today() + timedelta(days=60)
+    
+    # DB時間を基準にする
+    now = get_db_server_time()
+    today_str = now.strftime('%Y-%m-%d')
+    
+    # 納品日の上限など
+    limit_date = now.date() + timedelta(days=60)
     limit_str = limit_date.strftime('%Y-%m-%d')
 
+    # -------------------------------------------------
+    # 共通チェック
+    # -------------------------------------------------
     # マスタチェック
     cursor.execute("UPDATE DBA.hacfl04_work SET err_msg = err_msg || ' [店舗マスタ未登録]' WHERE batch_id = ? AND cucd NOT IN (SELECT cucd FROM DBA.cusmf04)", (batch_id,))
     cursor.execute("UPDATE DBA.hacfl04_work SET err_msg = err_msg || ' [comf1未登録]' WHERE batch_id = ? AND cocd NOT IN (SELECT cocd FROM DBA.comf1)", (batch_id,))
@@ -259,12 +279,27 @@ def exec_db_validation(cursor, batch_id):
     cursor.execute("UPDATE DBA.hacfl04_work SET err_msg = err_msg || ' [D店舗不可]' WHERE batch_id = ? AND cucd LIKE 'D%'", (batch_id,))
     cursor.execute("UPDATE DBA.hacfl04_work SET err_msg = err_msg || ' [発注数0]' WHERE batch_id = ? AND odsu = 0", (batch_id,))
 
+    # 納品日チェック
     cursor.execute("UPDATE DBA.hacfl04_work SET err_msg = err_msg || ' [納品日が過去]' WHERE batch_id = ? AND dldt IS NOT NULL AND dldt < CAST(? AS DATE)", (batch_id, today_str))
     cursor.execute("UPDATE DBA.hacfl04_work SET err_msg = err_msg || ' [納品日が2ヶ月先]' WHERE batch_id = ? AND dldt IS NOT NULL AND dldt > CAST(? AS DATE)", (batch_id, limit_str))
 
+    # -------------------------------------------------
+    # ★追加: 発注日(oddt)のモード別チェック
+    # -------------------------------------------------
+    
+    # 共通: 過去日はNG (前日以前)
+    cursor.execute("UPDATE DBA.hacfl04_work SET err_msg = err_msg || ' [発注日が過去]' WHERE batch_id = ? AND oddt IS NOT NULL AND oddt < CAST(? AS DATE)", (batch_id, today_str))
 
-def get_work_data_checked(batch_id):
-    """ バリデーション結果取得 """
+    # 朝締め(morning)の場合: 「当日以外」はすべてNG（つまり未来もNG）
+    if mode == 'morning':
+        cursor.execute("UPDATE DBA.hacfl04_work SET err_msg = err_msg || ' [当日以外不可]' WHERE batch_id = ? AND oddt IS NOT NULL AND oddt <> CAST(? AS DATE)", (batch_id, today_str))
+
+
+def get_work_data_checked(batch_id, mode):
+    """ 
+    バリデーション結果取得 
+    ★変更: 引数に mode を追加 (バリデーションロジックの分岐のため)
+    """
     conn = None
     data_list = []
     has_global_error = False
@@ -275,7 +310,8 @@ def get_work_data_checked(batch_id):
         conn = get_connection(TARGET_DB)
         cursor = conn.cursor()
         
-        exec_db_validation(cursor, batch_id)
+        # ★変更: 引数 mode を渡す
+        exec_db_validation(cursor, batch_id, mode)
         conn.commit()
 
         # 行番号(line_num)順に取得
@@ -332,6 +368,7 @@ def migrate_work_to_main(batch_id, mode):
     【CSV本登録用】
     modeを受け取り、INSERT先のテーブルを切り替える
     """
+    # 1. 時間＆モードチェック (これでテーブル名も決まる)
     is_ok, msg, config = check_time_and_get_config(mode)
     if not is_ok: return False, msg, 0
 
@@ -345,9 +382,11 @@ def migrate_work_to_main(batch_id, mode):
         count_row = cursor.fetchone()
         row_count = count_row[0] if count_row else 0
         
+        # モードに応じたテーブル名 (hacflr or hacfl04)
         target_table = config['table']
         
         # マスタから部門を補完してINSERT
+        # ※朝も夜もカラム構成は同じ前提
         sql_copy = f"""
             INSERT INTO {target_table} 
             (edpno, type, cucd, cocd, bucd, odsu, oddt, dldt)
@@ -368,6 +407,7 @@ def migrate_work_to_main(batch_id, mode):
     finally:
         if conn: conn.close()
 
+
 def get_store_name_by_cd(cucd):
     """ 店舗CDから店舗名を取得 """
     conn = None
@@ -385,6 +425,7 @@ def get_store_name_by_cd(cucd):
     finally:
         if conn: conn.close()
 
+
 def get_product_info_by_cd(cocd):
     """ 商品CDから詳細情報(品名, 規格, メーカー, 部門, 入数, B単)を取得 """
     conn = None
@@ -395,7 +436,7 @@ def get_product_info_by_cd(cocd):
         sql = """
             SELECT 
                 c3.hnam_k, c3.kika_k, c3.mnam_p, -- 0,1,2
-                c2.bucd, c2.irsu, c2.btan      -- 3,4,5
+                c2.bucd, c2.irsu, c2.btan       -- 3,4,5
             FROM DBA.comf3 c3
             LEFT JOIN DBA.comf204 c2 ON c3.cocd = c2.cocd
             WHERE c3.cocd = ?

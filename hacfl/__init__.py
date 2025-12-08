@@ -167,8 +167,8 @@ def confirm():
             error = message
 
     # --- 画面表示 (GET) ---
-    has_error, data_list = get_work_data_checked(batch_id)
-    
+    # ★変更: 第2引数に mode を渡す
+    has_error, data_list = get_work_data_checked(batch_id, mode)
     return render_template(
         'hacfl/confirm.html', 
         data_list=data_list, 
