@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>入庫上限数量管理</title>
+    <style>
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            margin: 40px;
+            background-color: #f9f9f9;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            padding: 30px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #d35400;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            font-size: 1.2em;
+            border-left: 5px solid #d35400;
+            padding-left: 10px;
+            margin-top: 40px;
+            margin-bottom: 15px;
+        }
+
+        /* 日付選択 */
+        .date-selector {
+            background-color: #eee;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+            .date-selector input {
+                padding: 8px;
+                font-size: 16px;
+                width: 120px;
+                text-align: center;
+            }
+
+        .btn-search {
+            padding: 8px 15px;
+            background-color: #666;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* 入力フォームテーブル */
+        .input-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+            .input-table th {
+                padding: 15px;
+                border: 1px solid #ddd;
+                width: 30%;
+                font-size: 1.1em;
+                color: white;
+            }
+
+            .input-table td {
+                padding: 15px;
+                border: 1px solid #ddd;
+                text-align: center;
+            }
+
+        .header-sayama {
+            background-color: #2980b9;
+        }
+
+        .header-moriya {
+            background-color: #e67e22;
+        }
+
+        input[type="number"] {
+            width: 120px;
+            padding: 10px;
+            font-size: 1.2em;
+            text-align: right;
+            font-weight: bold;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        /* 更新範囲 */
+        .scope-area {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #fff3e0;
+            border: 1px solid #ffcc80;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .scope-label {
+            font-weight: bold;
+            margin-right: 20px;
+            cursor: pointer;
+            font-size: 1.1em;
+        }
+
+        .scope-warning {
+            display: block;
+            color: #d35400;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        /* 保存ボタン */
+        .save-btn {
+            width: 100%;
+            padding: 15px;
+            background-color: #d35400;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+            .save-btn:hover {
+                background-color: #a04000;
+            }
+
+        /* 一覧リスト用テーブル */
+        .list-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+
+            .list-table th, .list-table td {
+                border: 1px solid #ccc;
+                padding: 6px;
+                text-align: center;
+            }
+
+        /* リストヘッダー色 */
+        .lh-sayama {
+            background-color: #d6eaf8;
+            color: #2874a6;
+        }
+
+        .lh-moriya {
+            background-color: #d5f5e3;
+            color: #1e8449;
+        }
+
+        .lh-base {
+            background-color: #f2f2f2;
+        }
+
+        /* 上限数（設定値）列の強調（濃いめ） */
+        .limit-col {
+            font-weight: bold;
+            background-color: #e0e0e0; /* 濃いグレーに変更 */
+            color: #000;
+            border-left: 3px solid #666; /* 枠線を太く */
+            font-size: 1.1em;
+        }
+
+        /* 予定数列 */
+        .sched-col {
+            color: #666;
+        }
+        /* 合計予定列 (少し強調) */
+        .sched-total-col {
+            font-weight: bold;
+            color: #333;
+            background-color: #fafafa;
+        }
+
+        .dummy-link {
+            color: #0066cc;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+            .dummy-link:hover {
+                color: #003366;
+            }
+
+        .message {
+            color: green;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #e8f5e9;
+            border-radius: 4px;
+        }
+
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            text-decoration: none;
+        }
+
+            .back-link:hover {
+                text-decoration: underline;
+            }
+    </style>
+
+    <script>
+        function confirmUpdate() {
+            const bulkRadio = document.getElementById('scope_bulk');
+            if (bulkRadio && bulkRadio.checked) {
+                return confirm("【注意】\n指定日以降を全て、上記の値で上書き更新します。\nよろしいですか？");
+            }
+            return true;
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>入庫上限数量設定</h1>
+
+        {% if message %}
+        <div class="message">{{ message }}</div>
+        {% endif %}
+
+        <form method="GET" class="date-selector">
+            <label>対象開始日: </label>
+            <input type="text" name="target_date" value="{{ target_date }}" placeholder="YYYY/MM/DD">
+            <button type="submit" class="btn-search">表示</button>
+        </form>
+
+        <form method="POST" onsubmit="return confirmUpdate();">
+            <input type="hidden" name="target_date" value="{{ target_date }}">
+
+            <table class="input-table">
+                <thead>
+                    <tr>
+                        <th class="header-sayama">狭山日高C 上限数</th>
+                        <th class="header-moriya">守谷C 上限数</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><input type="number" name="s_limit" value="{{ data.s_limit }}" min="0"> cs</td>
+                        <td><input type="number" name="m_limit" value="{{ data.m_limit }}" min="0"> cs</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="scope-area">
+                <label class="scope-label">
+                    <input type="radio" name="update_scope" value="single" checked> この日だけ更新
+                </label>
+                <label class="scope-label">
+                    <input type="radio" name="update_scope" value="bulk" id="scope_bulk"> この日以降全て
+                </label>
+                <span class="scope-warning">※「この日以降全て」を選ぶと、指定日以降の日付が全て上書きされます。</span>
+            </div>
+
+            <button type="submit" class="save-btn">設定を保存する</button>
+        </form>
+
+        <h2>向こう一ヶ月の設定状況</h2>
+        <table class="list-table">
+            <thead>
+                <tr>
+                    <th rowspan="2" class="lh-base">日付</th>
+                    <th colspan="4" class="lh-sayama">狭山日高C</th>
+                    <th colspan="4" class="lh-moriya">守谷C</th>
+                </tr>
+                <tr>
+                    <th class="lh-sayama">JV予定</th>
+                    <th class="lh-sayama">定番予定</th>
+                    <th class="lh-sayama">予定合計</th>
+                    <th class="lh-sayama" style="border-left: 3px solid #666;">上限設定</th>
+
+                    <th class="lh-moriya">JV予定</th>
+                    <th class="lh-moriya">定番予定</th>
+                    <th class="lh-moriya">予定合計</th>
+                    <th class="lh-moriya" style="border-left: 3px solid #666;">上限設定</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in monthly_list %}
+                <tr>
+                    <td>
+                        <span class="dummy-link" onclick="location.href='{{ url_for('dc_in.edit_limits') }}?target_date={{ row.date }}'">
+                            {{ row.date }}
+                        </span>
+                    </td>
+
+                    <td class="sched-col">{{ row.s_jv_sched }}</td>
+                    <td class="sched-col">{{ row.s_reg_sched }}</td>
+                    <td class="sched-total-col">{{ row.s_total_sched }}</td>
+                    <td class="limit-col">{{ row.s_limit }}</td>
+
+                    <td class="sched-col">{{ row.m_jv_sched }}</td>
+                    <td class="sched-col">{{ row.m_reg_sched }}</td>
+                    <td class="sched-total-col">{{ row.m_total_sched }}</td>
+                    <td class="limit-col">{{ row.m_limit }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <a href="{{ url_for('dc_in.home') }}" class="back-link">トップ画面に戻る</a>
+    </div>
+</body>
+</html>

@@ -23,6 +23,8 @@
         .icon-circle {
             width: 80px;
             height: 80px;
+            /* チェックマークの背景色は成功を表す緑(#28a745)のままが良いですが、
+               モード色に合わせたい場合は {{ theme_color }} に変更可能です */
             background-color: #28a745;
             border-radius: 50%;
             margin: 0 auto 20px;
@@ -38,8 +40,20 @@
         }
 
         h2 {
-            color: #28a745;
-            margin-bottom: 10px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        /* モード表示用のバッジ */
+        .mode-badge {
+            display: inline-block;
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
         p {
@@ -53,24 +67,27 @@
             font-size: 1.5em;
             font-weight: bold;
             color: #333;
-            margin: 10px 0;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
         }
 
         .btn {
             display: inline-block;
-            margin-top: 30px;
-            background-color: #007bff;
+            margin-top: 10px;
+            background-color: #6c757d;
             color: white;
-            padding: 12px 30px;
+            padding: 12px 40px;
             text-decoration: none;
             border-radius: 5px;
             font-weight: bold;
-            transition: background-color 0.2s;
+            transition: 0.3s;
         }
 
-            .btn:hover {
-                background-color: #0069d9;
-            }
+        .btn:hover {
+            background-color: #5a6268;
+        }
     </style>
 </head>
 <body>
@@ -82,10 +99,17 @@
 
         <h2>登録完了</h2>
 
-        <p>hacfl04へのデータ登録が正常に完了しました。</p>
+        <div class="mode-badge" style="background-color: {{ theme_color }};">
+            {{ mode_name }}
+        </div>
+
+        <p>
+            正常にデータ登録が完了しました。<br>
+            <span style="font-size:0.9em; color:#888;">(対象: {{ mode_name }})</span>
+        </p>
 
         <div class="count-display">
-            登録件数: <span style="color:#28a745;">{{ count }}</span> 件
+            登録件数: <span style="color: {{ theme_color }}; font-size: 1.2em;">{{ count }}</span> 件
         </div>
 
         <a href="{{ url_for('hacfl.index') }}" class="btn">TOP画面へ戻る</a>

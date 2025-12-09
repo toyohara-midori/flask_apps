@@ -1,0 +1,111 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>DC入荷伝票一覧(印刷用)</title>
+    <style>
+        body {
+            font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+            font-size: 10px; /* 印刷用に少し小さく */
+            padding: 20px;
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .meta-info {
+            text-align: right;
+            margin-bottom: 5px;
+            font-size: 11px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            border: 1px solid #333;
+            padding: 4px;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        th {
+            background-color: #f0f0f0;
+            text-align: center;
+            white-space: nowrap;
+        }
+        /* 印刷時にボタンを消す */
+        @media print {
+            .no-print {
+                display: none;
+            }
+        }
+
+        .num-col {
+            text-align: right;
+        }
+
+        .center-col {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print" style="text-align: right; margin-bottom: 10px;">
+        <button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">🖨️ このページを印刷（PDF保存）</button>
+        <button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">閉じる</button>
+    </div>
+
+    <h2>DC入荷伝票一覧</h2>
+
+    <div class="meta-info">
+        出力日:
+        <script>document.write(new Date().toLocaleDateString());</script>
+        {% if current_filters.delivery_date %} | 納品日指定: {{ current_filters.delivery_date }}{% endif %}
+        {% if current_filters.center %} | センター: {{ current_filters.center }}{% endif %}
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>取込ID</th>
+                <th>伝票番号</th>
+                <th>行</th>
+                <th>センター</th>
+                <th>部門</th>
+                <th>取引先</th>
+                <th>商品CD</th>
+                <th>商品名</th>
+                <th>メーカー</th>
+                <th>納品日</th>
+                <th>数量</th>
+                <th>原価</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in vouchers %}
+            <tr>
+                <td class="center-col">{{ row.import_id }}</td>
+                <td class="center-col">{{ row.voucher_id }}</td>
+                <td class="center-col">{{ row.line_no }}</td>
+                <td class="center-col">{{ row.center }}</td>
+                <td>{{ row.dept_name }}</td>
+                <td>{{ row.vendor }}</td>
+                <td class="center-col">{{ row.item_code }}</td>
+                <td>{{ row.first_p_name }}</td>
+                <td>{{ row.manufacturer }}</td>
+                <td class="center-col">{{ row.delivery_date }}</td>
+                <td class="num-col">{{ row.order_qty }}</td>
+                <td class="num-col">{{ row.cost_price }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</body>
+</html>

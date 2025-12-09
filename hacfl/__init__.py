@@ -1,40 +1,62 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, Response, jsonify, render_template_string
+from flask import Blueprint, render_template, request, redirect, url_for
 from common.db_check_util import is_db_available, MAINTENANCE_HTML
-
-# ロジックのインポート
+from common.auth_util import get_remote_user
+from common.ad_tool import is_user_in_group
+from common.log_util import write_op_log
+# ① 住所（どこから？）
 from common.hacfl_db_logic import (
-    parse_and_insert_work, 
-    get_work_data_checked, 
-    migrate_work_to_main,
-    insert_single_record,
-    get_store_name_by_cd,
-    get_product_info_by_cd,
-    check_time_and_get_config
+
+    # ② 持ち物リスト（なにを？）
+    parse_and_insert_work,      # 作業データを解釈して保存する機能
+    get_work_data_checked,      # チェック済みの作業データを取得する機能
+    migrate_work_to_main,       # データをメインの場所に移動させる機能
+    insert_single_record,       # 1件だけデータを登録する機能
+    check_time_and_get_config   # 時間を確認して設定を取得する機能
 )
 
 hacfl_bp = Blueprint(
-    'hacfl', 
-    __name__, 
+    'hacfl',
+    __name__,
     template_folder='templates'
 )
-
 # ---------------------------------------------------
-# ★共通処理: リクエストのたびにDBチェック
+# ★共通処理: リクエストごとのチェック (DB & 認証)
 # ---------------------------------------------------
 @hacfl_bp.before_request
-def check_db_status():
-    if not request.endpoint:
-        return
-    
-    # 静的ファイルは除外 (CSSなどが読み込めなくなるのを防ぐ)
-    if 'static' in request.endpoint:
+def before_request_handler():
+    # 静的ファイル等はチェック対象外
+    if not request.endpoint or 'static' in request.endpoint:
         return
 
-    # DBチェック実行
+    # 1. DB接続チェック
     if not is_db_available():
-        # ★ファイルを作らず、文字列をそのままHTMLとして返す
-        # 503 (Service Unavailable) のステータスコードも一緒に返すと親切です
         return render_template_string(MAINTENANCE_HTML), 503
+
+    # 2. ユーザー特定
+    user = get_remote_user(request)
+    if not user:
+        abort(401)
+
+    # 3. ADグループ認証
+    allowed_groups = [
+        'Domain Admins',
+        'G-商品部ディストリビューター',
+        'G-商品部バイヤー'
+    ]
+    
+    has_permission = False
+    try:
+        for group in allowed_groups:
+            if is_user_in_group(user, group):
+                has_permission = True
+                break
+    except Exception as e:
+        print(f"[AD Auth Error] {e}")
+        abort(403, description="認証サーバーへの接続に失敗しました。")
+
+    if not has_permission:
+        print(f"[Access Denied] User: {user}, Module: hacfl")
+        abort(403, description="この機能を利用する権限がありません。")
 
 
 # ---------------------------------------------------
@@ -42,20 +64,16 @@ def check_db_status():
 # ---------------------------------------------------
 @hacfl_bp.route('/download_template')
 def download_template():
-    # 5項目用のCSVデータ (ヘッダー + サンプル1行)
     csv_data = [
         "店舗CD,商品CD,発注数,発注日(任意),納品日(任意)",
         "111,12345678,10,,"
     ]
-    # 改行コードで結合
     csv_string = "\r\n".join(csv_data)
 
-    # レスポンス作成 (Excel用にShift-JISでエンコード)
     response = Response(
         csv_string.encode("cp932"), 
         mimetype="text/csv"
     )
-    # ファイル名指定
     response.headers["Content-Disposition"] = "attachment; filename=hacfl_template.csv"
     
     return response
@@ -68,21 +86,23 @@ def download_template():
 def index():
     msg = ""
     error = ""
+    current_mode = None  # 初期状態は未選択
     
-    # セッションクリア (初期化)
+    current_user = get_remote_user(request)
+
+    # --- GET時の処理 ---
     if request.method == 'GET':
         session.pop('hacfl_batch_id', None)
         session.pop('hacfl_mode', None)
 
+    # --- POST時の処理 ---
     if request.method == 'POST':
-        # フォームからモードとアクションタイプを取得
-        mode = request.form.get('mode') # normal or morning
-        action_type = request.form.get('action_type') # single or csv
+        current_mode = request.form.get('mode')
+        action_type = request.form.get('action_type')
         
-        # モードをセッションに保存 (Confirm画面で使うため)
-        session['hacfl_mode'] = mode
+        session['hacfl_mode'] = current_mode
 
-        # --- A. 単発登録の場合 ---
+        # --- A. 単発登録 ---
         if action_type == 'single':
             form_data = {
                 'cucd': request.form.get('cucd'),
@@ -91,31 +111,52 @@ def index():
                 'oddt': request.form.get('oddt'),
                 'dldt': request.form.get('dldt')
             }
-            success, message = insert_single_record(mode, form_data)
+            success, message = insert_single_record(current_mode, form_data)
+            
             if success:
                 msg = message
+                write_op_log(
+                    user_id=current_user,
+                    module='hacfl',
+                    action='SINGLE_INSERT',
+                    msg=f"成功: {message}"
+                )
             else:
                 error = message
         
-        # --- B. CSVアップロードの場合 ---
+        # --- B. CSVアップロード ---
         elif action_type == 'csv':
             if 'csv_file' not in request.files:
                 error = "ファイルが送信されていません。"
             else:
                 file = request.files['csv_file']
-                # 引数に mode を追加
-                success, message, batch_id = parse_and_insert_work(file, mode)
+                success, message, batch_id = parse_and_insert_work(file, current_mode)
                 
                 if success:
                     session['hacfl_batch_id'] = batch_id
+                    
+                    write_op_log(
+                        user_id=current_user,
+                        module='hacfl',
+                        action='CSV_UPLOAD',
+                        msg=f"BatchID: {batch_id} アップロード完了"
+                    )
+                    
                     return redirect(url_for('hacfl.confirm'))
                 else:
                     error = message
 
-    return render_template('hacfl/index.html', msg=msg, error=error)
+    return render_template(
+        'hacfl/index.html', 
+        msg=msg, 
+        error=error,
+        mode=current_mode,
+        current_user=current_user
+    )
+
 
 # ===================================================
-#  非同期通信用API (JavaScriptから呼ばれる)
+#  非同期通信用API
 # ===================================================
 @hacfl_bp.route('/api/get_store_name')
 def api_get_store_name():
@@ -135,13 +176,24 @@ def api_get_product_info():
     else:
         return jsonify({'found': False})
 
+@hacfl_bp.route('/api/check_mode_time')
+def api_check_mode_time():
+    mode = request.args.get('mode')
+    is_ok, message, _ = check_time_and_get_config(mode)
+    return jsonify({
+        'valid': is_ok,
+        'message': message
+    })
+
+
 # ---------------------------------------------------
-# 3. 確認画面 (CSVの中身とエラーを表示)
+# 3. 確認画面
 # ---------------------------------------------------
 @hacfl_bp.route('/confirm', methods=['GET', 'POST'])
 def confirm():
     batch_id = session.get('hacfl_batch_id')
-    mode = session.get('hacfl_mode') # モードも取得
+    mode = session.get('hacfl_mode')
+    current_user = get_remote_user(request)
     
     if not batch_id or not mode:
         return redirect(url_for('hacfl.index'))
@@ -149,33 +201,38 @@ def confirm():
     msg = ""
     error = ""
 
-    # ★追加: モード設定を取得して、画面表示用の名前(例: "当日朝締め")を取り出す
+    # モード名取得
     _, _, config = check_time_and_get_config(mode)
     mode_name = config['name'] if config else "不明なモード"
 
-    # --- 登録ボタンが押された場合 (POST) ---
     if request.method == 'POST':
-        # 引数に mode を追加 (テーブル振分けのため)
         success, message, count = migrate_work_to_main(batch_id, mode)
         
         if success:
+            write_op_log(
+                user_id=current_user,
+                module='hacfl',
+                action='CSV_REGIST',
+                msg=f"一括登録完了: {count}件 (BatchID: {batch_id}, Mode: {mode})"
+            )
+            
             session.pop('hacfl_batch_id', None)
-            # 件数をセッションに一時保存
             session['hacfl_reg_count'] = count
+            session['hacfl_reg_mode'] = mode  # ★モードを保存
             return redirect(url_for('hacfl.complete'))
         else:
             error = message
 
-    # --- 画面表示 (GET) ---
-    # ★変更: 第2引数に mode を渡す
     has_error, data_list = get_work_data_checked(batch_id, mode)
+    
     return render_template(
         'hacfl/confirm.html', 
         data_list=data_list, 
         has_error=has_error, 
         error_msg=error,
-        mode_name=mode_name  # ★追加: 画面にモード名を渡す
-    )
+        mode_name=mode_name,
+        mode=mode
+    )  # ★ここのカッコ閉じが抜けていた可能性が高いです
 
 
 # ---------------------------------------------------
@@ -183,6 +240,20 @@ def confirm():
 # ---------------------------------------------------
 @hacfl_bp.route('/complete')
 def complete():
-    # セッションから件数を取得して表示
+    # セッションから件数とモードを取得
     count = session.pop('hacfl_reg_count', 0)
-    return render_template('hacfl/complete.html', count=count)
+    mode = session.pop('hacfl_reg_mode', 'normal') 
+    
+    # モード設定を取得
+    config = MODE_CONFIG.get(mode)
+    mode_name = config['name'] if config else "通常予約"
+    
+    # 色を決定
+    theme_color = "#dc3545" if mode == 'morning' else "#007bff"
+
+    return render_template(
+        'hacfl/complete.html', 
+        count=count, 
+        mode_name=mode_name,
+        theme_color=theme_color
+    )

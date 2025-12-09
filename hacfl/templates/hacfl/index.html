@@ -160,32 +160,121 @@
 
     <script>
         // --- 1. モード切替の表示制御 ---
-        function updateMode() {
-            // 選択されているモードを取得
+        async function updateMode() {
+            const rbNormal = document.getElementById('rb_normal');
+            const rbMorning = document.getElementById('rb_morning');
+            const btns = document.querySelectorAll('.btn-submit');
+
+            // ★追加: どっちも選ばれていない場合 (初期状態)
+            if (!rbNormal.checked && !rbMorning.checked) {
+                btns.forEach(btn => {
+                    btn.disabled = true;
+                    btn.style.backgroundColor = "#ccc";
+                    btn.style.cursor = "not-allowed";
+                    btn.style.opacity = "0.6";
+                    // 元のテキストを保持しつつメッセージを出すのは難しいので、シンプルに
+                    if (btn.innerText.includes("チェックへ進む")) {
+                         btn.innerText = "業務モードを選択してください";
+                    } else {
+                         btn.innerText = "業務モードを選択してください";
+                    }
+                });
+                return; // ここで終了
+            }
+
+            // --- 以下、選択された後の処理 ---
+
             let mode = "";
-            if(document.getElementById('rb_normal').checked) mode = "normal";
+            if(rbNormal.checked) mode = "normal";
             else mode = "morning";
 
             // 隠しフィールドにセット
             document.getElementById('hidden_mode_single').value = mode;
             document.getElementById('hidden_mode_csv').value = mode;
 
-            // ボタンの色と文字を変える演出
-            const btns = document.querySelectorAll('.btn-submit');
+            // 問い合わせ中表示
             btns.forEach(btn => {
-                // 文言のリセット（重複追加防止）
-                let baseText = btn.innerText.replace("（当日朝締め）", "").replace("（通常予約）", "");
+                btn.disabled = true;
+                btn.style.opacity = "0.6";
+                btn.style.cursor = "wait";
+                btn.innerText = "確認中...";
+            });
 
-                if(mode === "normal") {
-                    btn.style.backgroundColor = "#007bff";
-                    btn.innerText = baseText + "（通常予約）";
+            // ---------------------------------------------------------
+            // API問い合わせ: DB時間チェック
+            // ---------------------------------------------------------
+            let isError = false;
+            let errorMsg = "";
+
+            try {
+                const res = await fetch(`{{ url_for('hacfl.api_check_mode_time') }}?mode=${mode}&t=${new Date().getTime()}`);
+                const data = await res.json();
+
+                if (!data.valid) {
+                    isError = true;
+                    errorMsg = data.message;
+                }
+            } catch (e) {
+                console.error(e);
+                isError = true;
+                errorMsg = "サーバー通信エラー";
+            }
+
+            // エラー表示エリア制御
+            let errDiv = document.getElementById('js_time_error');
+            if (!errDiv) {
+                const modeArea = document.querySelector('.mode-area');
+                errDiv = document.createElement('div');
+                errDiv.id = 'js_time_error';
+                errDiv.className = 'alert-error';
+                errDiv.style.textAlign = 'center';
+                errDiv.style.fontWeight = 'bold';
+                errDiv.style.marginBottom = '20px';
+                modeArea.parentNode.insertBefore(errDiv, modeArea.nextSibling);
+            }
+
+            if (isError) {
+                errDiv.innerText = errorMsg;
+                errDiv.style.display = 'block';
+            } else {
+                errDiv.style.display = 'none';
+            }
+
+            // ボタン状態更新
+            btns.forEach(btn => {
+                // ボタンの元の文言を復元するロジック
+                // (CSV側か単発側かで文言が違うため、親要素などで判定するか、固定文字にする)
+                // 今回は簡易的に、HTMLの構造（name属性など）を見ずに、
+                // この関数の外側（HTML）で定義されている「初期文言」に戻すのは難しいため、
+                // シンプルに条件分岐で書き戻します。
+
+                let baseText = "登録する"; // 単発側のデフォルト
+                // もし親フォームがCSV用なら
+                if (btn.closest('form').querySelector('input[name="csv_file"]')) {
+                    baseText = "チェックへ進む";
+                }
+
+                if (isError) {
+                    btn.disabled = true;
+                    btn.style.backgroundColor = "#ccc";
+                    btn.style.cursor = "not-allowed";
+                    btn.style.opacity = "1.0";
+                    btn.innerText = baseText + "（受付時間外）";
                 } else {
-                    btn.style.backgroundColor = "#dc3545";
-                    btn.innerText = baseText + "（当日朝締め）";
+                    btn.disabled = false;
+                    btn.style.cursor = "pointer";
+                    btn.style.opacity = "1.0";
+
+                    if(mode === "normal") {
+                        btn.style.backgroundColor = "#007bff";
+                        btn.innerText = baseText + "（通常予約）";
+                    } else {
+                        btn.style.backgroundColor = "#dc3545";
+                        btn.innerText = baseText + "（当日朝締め）";
+                    }
                 }
             });
         }
-
         // --- 2. 店舗名取得 (AJAX) ---
         async function fetchStoreName(input) {
             const cucd = input.value.trim();
@@ -250,7 +339,7 @@
             }
         }
 
-        // ページ読み込み時に実行
+        // ページ読み込み時に実行 (これで初期状態＝全無効になる)
         window.onload = updateMode;
     </script>
 </head>
@@ -262,13 +351,15 @@
         {% if error %} <div class="alert-error">{{ error }}</div> {% endif %}
         {% if msg %} <div class="alert-success">{{ msg }}</div> {% endif %}
 
-        <div class="mode-area">
-            <input type="radio" name="mode_select" id="rb_normal" checked onchange="updateMode()">
-            <label for="rb_normal" class="mode-label">通常予約</label>
+                     <div class="mode-area">
+                         <input type="radio" name="mode_select" id="rb_normal" onchange="updateMode()"
+                                {% if mode=='normal' %}checked{% endif %}>
+                         <label for="rb_normal" class="mode-label">通常予約</label>
 
-            <input type="radio" name="mode_select" id="rb_morning" onchange="updateMode()">
-            <label for="rb_morning" class="mode-label">当日朝締め</label>
-        </div>
+                         <input type="radio" name="mode_select" id="rb_morning" onchange="updateMode()"
+                                {% if mode=='morning' %}checked{% endif %}>
+                         <label for="rb_morning" class="mode-label">当日朝締め</label>
+                     </div>
 
         <div class="section-box">
             <span class="section-title">単発データ登録</span>

@@ -12,6 +12,7 @@ from cart_stay_register import cart_bp  # cart_stay_register/__init__.py
 from cart_result import cart_result_bp  # cart_result/__init__.py
 
 from hacfl import hacfl_bp
+from dc_in import dc_in_bp
 
 class PrefixMiddleware(object):
     def __init__(self, app, prefix=''):
@@ -44,6 +45,7 @@ app.register_blueprint(cart_bp, url_prefix="/cart_stay_register")
 app.register_blueprint(cart_result_bp, url_prefix="/cart_result")
 
 app.register_blueprint(hacfl_bp, url_prefix="/hacfl")
+app.register_blueprint(dc_in_bp, url_prefix="/dc_in")
 
 # DBG
 @app.route("/__debug_static_main__")

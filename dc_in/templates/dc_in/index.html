@@ -1,0 +1,104 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>DC入庫発注データアップロード</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 50px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        input[type="file"] {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+
+        input[type="submit"] {
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+            input[type="submit"]:hover {
+                background-color: #0056b3;
+            }
+
+        /* --- 追加: 区切り線のスタイル --- */
+        .separator {
+            border: 0;
+            height: 1px;
+            background: #ccc;
+            margin: 40px 0; /* 上下に広めの余白 */
+        }
+
+        /* --- リンクエリアのスタイル --- */
+        .menu-area {
+            text-align: center;
+        }
+
+        .nav-link {
+            display: inline-block;
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+            padding: 12px 20px;
+            border: 2px solid #aaa; /* 枠線を少し太く */
+            border-radius: 5px;
+            background-color: #f4f4f4;
+            transition: all 0.3s;
+        }
+
+            .nav-link:hover {
+                background-color: #e2e6ea;
+                border-color: #888;
+            }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DC入庫発注データアップロード</h1>
+        <form method="POST" action="{{ url_for('dc_in.show_confirmation') }}" enctype="multipart/form-data">
+            <label for="csv-file">取り込むCSVファイルを選択してください:</label>
+            <input type="file" id="csv-file" name="file" accept=".csv" required>
+            <input type="submit" value="エラーチェックに進む">
+        </form>
+
+        <hr class="separator">
+        <div class="menu-area">
+            <p>▼ 登録済みデータの検索・表示はこちら</p>
+            <a href="{{ url_for('dc_in.voucher_list') }}" class="nav-link">DC入庫伝票一覧・検索</a>
+        </div>
+
+        <div class="menu-area" style="margin-top: 40px; border-top: 2px dashed #ccc;">
+            <p style="color: #d35400; font-weight: bold;">▼ 管理者メニュー (作業責任者のみ)</p>
+            <a href="{{ url_for('dc_in.edit_limits') }}" class="nav-link" style="border-color: #d35400; color: #d35400;">
+                入庫上限数量の変更
+            </a>
+        </div>
+</body>
+</html>

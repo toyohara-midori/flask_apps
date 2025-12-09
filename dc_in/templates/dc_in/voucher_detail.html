@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>伝票詳細</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .voucher-container {
+            background: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+            display: inline-block;
+            min-width: 800px;
+        }
+
+        .header-info {
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .header-row {
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+
+        .header-label {
+            font-weight: bold;
+            color: #555;
+            margin-right: 10px;
+            display: inline-block;
+            width: 120px;
+        }
+
+        .summary-area {
+            background-color: #eef;
+            padding: 10px 20px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+
+        .summary-item span {
+            font-size: 18px;
+            color: #000;
+        }
+
+        table {
+            width: auto;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        th, td {
+            border: 1px solid #ccc;
+            padding: 5px 10px;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            text-align: center;
+        }
+
+        .num-col {
+            text-align: right;
+            font-family: monospace;
+        }
+
+        .row-index {
+            text-align: center;
+            font-family: monospace;
+            color: #555;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 8px 20px;
+            background: #666;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+
+            .btn:hover {
+                background-color: #555;
+            }
+    </style>
+</head>
+<body>
+
+    <div class="voucher-container">
+        {% if data %}
+        <div class="header-info">
+            <div class="header-row">
+                <span class="header-label">入庫伝票番号:</span> {{ voucher_id }}
+            </div>
+            <div class="header-row">
+                <span class="header-label">値引伝票番号:</span> {{ data.discount_id }}
+            </div>
+            <div class="header-row">
+                <span class="header-label">センター:</span> {{ data.center }}
+            </div>
+            <div class="header-row">
+                <span class="header-label">部門:</span> {{ data.dept_code }} {{ data.dept_name }}
+            </div>
+            <div class="header-row">
+                <span class="header-label">納品日:</span> {{ data.delivery_date }}
+            </div>
+            <div class="header-row">
+                <span class="header-label">取引先:</span> {{ data.vendor_code }} {{ data.vendor }}
+            </div>
+            <div class="header-row">
+                <span class="header-label">作業者:</span> {{ data.operator }}
+            </div>
+
+            <div class="summary-area">
+                <div class="summary-item">合計ケース: <span>{{ data.total_cases }}</span> cs</div>
+                <div class="summary-item">合計原価: &yen;<span>{{ data.total_cost }}</span></div>
+            </div>
+        </div>
+
+        <h3>【明細内容】</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>行</th>
+                    <th>商品CD</th>
+                    <th>JANCD</th>
+                    <th>商品名</th>
+                    <th>規格</th>
+                    <th>メーカー</th>
+                    <th>入数</th>
+                    <th>バラ</th>
+                    <th>ケース</th>
+                    <th>原単価</th>
+                    <th>原価合計</th>
+                    <th>値引額</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in data.details %}
+                <tr>
+                    <td class="row-index">{{ loop.index }}</td>
+                    <td>{{ item.p_code }}</td>
+                    <td>{{ item.jan }}</td>
+                    <td>{{ item.p_name }}</td>
+                    <td>{{ item.spec }}</td>
+                    <td>{{ item.manufacturer }}</td>
+                    <td class="num-col">{{ item.per_case }}</td>
+                    <td class="num-col">{{ item.loose }}</td>
+                    <td class="num-col">{{ item.case }}</td>
+                    <td class="num-col">{{ item.cost }}</td>
+                    <td class="num-col">&yen; {{ item.row_total }}</td>
+                    <td class="num-col">&yen; {{ item.discount }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% else %}
+        <h2 style="color: red;">エラー</h2>
+        <p>指定された伝票番号 ({{ voucher_id }}) のデータは存在しません。</p>
+        {% endif %}
+
+        <br>
+        <a href="{{ url_for('dc_in.voucher_list') }}" class="btn">一覧へ戻る</a>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>DC入荷伝票一覧</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        /* フィルタエリア */
+        .filter-area {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+            .filter-group label {
+                font-size: 11px;
+                font-weight: bold;
+                margin-bottom: 3px;
+            }
+
+            .filter-group select {
+                padding: 2px;
+                height: 28px;
+                font-size: 13px;
+            }
+
+        .id-select {
+            border: 2px solid #007bff;
+            background-color: #eef;
+        }
+
+        .toggle-btn-group {
+            display: flex;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            overflow: hidden;
+            height: 28px;
+        }
+
+            .toggle-btn-group label {
+                padding: 4px 10px;
+                font-size: 12px;
+                cursor: pointer;
+                border-right: 1px solid #ccc;
+                background: #fff;
+                color: #333;
+                display: flex;
+                align-items: center;
+            }
+
+                .toggle-btn-group label:last-child {
+                    border-right: none;
+                }
+
+            .toggle-btn-group input[type="radio"] {
+                display: none;
+            }
+
+                .toggle-btn-group input[type="radio"]:checked + label {
+                    background-color: #007bff;
+                    color: white;
+                }
+
+        .date-control {
+            display: flex;
+            align-items: center;
+            height: 28px;
+        }
+
+            .date-control input[type="text"] {
+                width: 90px;
+                text-align: center;
+                padding: 2px;
+                height: 100%;
+                border: 1px solid #ccc;
+                border-left: none;
+                border-right: none;
+                font-size: 13px;
+            }
+
+        .date-btn {
+            width: 25px;
+            height: 100%;
+            padding: 0;
+            background: #e0e0e0;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+            .date-btn:first-child {
+                border-radius: 4px 0 0 4px;
+            }
+
+            .date-btn:last-child {
+                border-radius: 0 4px 4px 0;
+            }
+
+        button.primary, button.reset {
+            padding: 4px 12px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            height: 28px;
+            font-size: 13px;
+            color: white;
+        }
+
+        button.primary {
+            background-color: #007bff;
+        }
+
+        button.reset {
+            background-color: #6c757d;
+        }
+
+        .export-area {
+            text-align: right;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        .export-btn {
+            padding: 5px 12px;
+            text-decoration: none;
+            color: white;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-left: 5px;
+            display: inline-block;
+        }
+
+        .csv-btn {
+            background-color: #28a745;
+        }
+
+        .pdf-btn {
+            background-color: #dc3545;
+        }
+
+        /* --- テーブルスタイル --- */
+        table {
+            width: auto;
+            max-width: 100%;
+            border-collapse: collapse;
+            margin-top: 5px;
+            font-size: 13px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        th, td {
+            border: 1px solid #ccc;
+            padding: 4px 8px;
+            text-align: left;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        /* ヘッダー: ソート可能な列はポインタカーソルに */
+        th {
+            background-color: #f2f2f2;
+            text-align: center;
+            user-select: none;
+        }
+
+            th.sortable {
+                cursor: pointer;
+                color: #0056b3;
+            }
+
+                th.sortable:hover {
+                    background-color: #e2e6ea;
+                }
+
+        /* ソート矢印の色 */
+        .sort-icon {
+            font-size: 0.8em;
+            margin-left: 3px;
+            color: #d35400;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .check-col {
+            width: 30px;
+            text-align: center;
+        }
+
+            .check-col input {
+                cursor: pointer;
+            }
+
+        .print-voucher-area {
+            width: fit-content;
+            margin: 15px auto;
+            padding: 10px 30px;
+            background-color: #eef;
+            border: 1px solid #ccc;
+            text-align: center;
+            border-radius: 5px;
+        }
+
+        .print-btn {
+            padding: 8px 20px;
+            background-color: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+            .print-btn:hover {
+                background-color: #138496;
+            }
+
+        a {
+            text-decoration: none;
+            color: #0066cc;
+            cursor: pointer;
+        }
+
+        .id-search {
+            margin-bottom: 5px;
+            text-align: right;
+        }
+    </style>
+    <script>
+        function openDetailWindow(url) {
+            const width = 1000; const height = 800;
+            const left = (window.screen.width - width) / 2;
+            const top = (window.screen.height - height) / 2;
+            window.open(url, 'VoucherDetailWindow', `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`);
+        }
+        function toggleAll(source) {
+            checkboxes = document.getElementsByName('v_ids');
+            for (var i = 0, n = checkboxes.length; i < n; i++) checkboxes[i].checked = source.checked;
+        }
+        function changeDate(delta) {
+            const input = document.querySelector('input[name="delivery_date"]');
+            const val = input.value;
+            if (!val) return;
+            const d = new Date(val);
+            if (isNaN(d.getTime())) return;
+            d.setDate(d.getDate() + delta);
+            const y = d.getFullYear();
+            const m = ('00' + (d.getMonth() + 1)).slice(-2);
+            const day = ('00' + d.getDate()).slice(-2);
+            input.value = `${y}/${m}/${day}`;
+        }
+        // ★追加：一覧CSVボタンを押した時の処理
+        function submitListCsv() {
+            const form = document.querySelector('form[action*="download_voucher_pdf"]');
+
+            if (!form) {
+                alert("エラー：フォームが見つかりません。");
+                return;
+            }
+
+            const checkboxes = form.querySelectorAll('input[name="v_ids"]:checked');
+            if (checkboxes.length === 0) {
+                alert("出力する伝票にチェックを入れてください。");
+                return;
+            }
+
+            const originalAction = form.action;
+            const originalTarget = form.target; // targetも保存しておく
+
+            // CSVは画面遷移せずダウンロードさせたいので、targetを一時的に外す手もありますが、
+            // 今の設定(target="_blank")のままでも「新しいタブが開いてすぐ閉じる＆ダウンロード開始」になるので
+            // そのままの方が安全です。
+
+            // 送信先をCSVダウンロードに変更
+            form.action = "{{ url_for('dc_in.download_csv') }}";
+
+            form.submit();
+
+            // 後始末
+            setTimeout(() => {
+                form.action = originalAction;
+            }, 100);
+        }
+
+        // ★追加：一覧PDFボタンを押した時の処理
+        function submitListPdf() {
+            // 1. フォームを取得 (name属性がないので document.querySelectorで取得)
+            // ページ下部のチェックボックスを囲んでいるフォームを探す
+            const form = document.querySelector('form[action*="download_voucher_pdf"]');
+
+            if (!form) {
+                alert("フォームが見つかりません");
+                return;
+            }
+
+            // 2. チェックがついているか確認
+            const checkboxes = form.querySelectorAll('input[name="v_ids"]:checked');
+            if (checkboxes.length === 0) {
+                alert("出力する伝票にチェックを入れてください。");
+                return;
+            }
+
+            // 3. 送信先を一時的に「print_list」に変更
+            const originalAction = form.action; // 元のURL(帳票用)を保存
+            form.action = "{{ url_for('dc_in.print_list') }}";
+
+            // 4. 送信！(別タブで開く設定はフォームに既にあるはず)
+            form.submit();
+
+            // 5. 送信先を元に戻す (これをしないと下のボタンも一覧印刷になっちゃう)
+            setTimeout(() => {
+                form.action = originalAction;
+            }, 100);
+        }
+        // ★追加: ソート実行用関数
+        function applySort(colName) {
+            const form = document.querySelector('form.filter-area');
+            const sortInput = form.querySelector('input[name="sort"]');
+            const orderInput = form.querySelector('input[name="order"]');
+
+            // 現在と同じカラムなら順序を反転、違うなら昇順でセット
+            if (sortInput.value === colName) {
+                orderInput.value = (orderInput.value === 'asc') ? 'desc' : 'asc';
+            } else {
+                sortInput.value = colName;
+                orderInput.value = 'asc';
+            }
+            form.submit();
+        }
+    </script>
+</head>
+<body>
+
+    <h3 style="margin: 10px 0;">DC入荷伝票一覧</h3>
+
+    <div class="id-search">
+        <form method="POST" style="display:inline;">
+            <input type="text" name="voucher_id" placeholder="例: 600101" required style="padding:2px 5px; font-size:13px;">
+            <button type="submit" class="primary">番号検索</button>
+        </form>
+        {% if error %}<span style="color:red; margin-left:10px; font-size:13px;">{{ error }}</span>{% endif %}
+    </div>
+
+    <form method="GET" class="filter-area">
+        <input type="hidden" name="sort" value="{{ current_filters.sort }}">
+        <input type="hidden" name="order" value="{{ current_filters.order }}">
+
+        <div class="filter-group">
+            <label style="color: #007bff;">📂 取込ID</label>
+            <select name="import_id" class="id-select" onchange="this.form.submit()">
+                <option value="">全て表示</option>
+                {% for i_id in import_ids %}
+                <option value="{{ i_id }}" {% if current_filters.import_id==i_id %}selected{% endif %}>{{ i_id }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>納品日</label>
+            <div class="date-control">
+                <button type="button" class="date-btn" onclick="changeDate(-1)">＜</button>
+                <input type="text" name="delivery_date" value="{{ default_date }}">
+                <button type="button" class="date-btn" onclick="changeDate(1)">＞</button>
+            </div>
+        </div>
+        <div class="filter-group">
+            <label>センター</label>
+            <div class="toggle-btn-group">
+                <input type="radio" name="center" value="" id="c_all" {% if not current_filters.center %}checked{% endif %}>
+                <label for="c_all">全て</label>
+                {% for c in centers %}
+                <input type="radio" name="center" value="{{ c }}" id="c_{{ loop.index }}" {% if current_filters.center==c %}checked{% endif %}>
+                <label for="c_{{ loop.index }}">{{ c }}</label>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="filter-group">
+            <label>部門</label>
+            <select name="dept">
+                <option value="">全て</option>
+                {% for d in depts %}
+                <option value="{{ d }}" {% if current_filters.dept==d %}selected{% endif %}>{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>取引先</label>
+            <select name="vendor" style="max-width: 150px;">
+                <option value="">全て</option>
+                {% for v in vendors %}
+                <option value="{{ v }}" {% if current_filters.vendor==v %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>種別</label>
+            <div class="toggle-btn-group">
+                <input type="radio" name="type" value="all" id="t_all" {% if not current_filters.type or current_filters.type=='all' %}checked{% endif %}>
+                <label for="t_all">全て</label>
+                <input type="radio" name="type" value="regular" id="t_reg" {% if current_filters.type=='regular' %}checked{% endif %}>
+                <label for="t_reg">定番</label>
+                <input type="radio" name="type" value="jv" id="t_jv" {% if current_filters.type=='jv' %}checked{% endif %}>
+                <label for="t_jv">JV</label>
+            </div>
+        </div>
+        <button type="submit" class="primary">絞り込み</button>
+        <button type="button" class="reset" onclick="location.href='{{ url_for('dc_in.voucher_list') }}'">リセット</button>
+    </form>
+
+    <div class="export-area" style="width: 95%; margin: 0 auto; margin-bottom: 5px;">
+        <span>チェックしたリストを出力:</span> <button type="button" onclick="submitListCsv()" class="export-btn csv-btn" style="border:none; cursor:pointer;">
+            📥 一覧CSV
+        </button>
+
+        <button type="button" onclick="submitListPdf()" class="export-btn pdf-btn" style="border:none; cursor:pointer;">
+            📄 一覧PDF
+        </button>
+    </div>
+
+    <form method="POST" action="{{ url_for('dc_in.download_voucher_pdf') }}" target="_blank">
+        <table>
+            <thead>
+                <tr>
+                    <th class="check-col"><input type="checkbox" onclick="toggleAll(this)"></th>
+
+                    <th class="sortable" onclick="applySort('import_id')">
+                        取込ID
+                        {% if current_filters.sort == 'import_id' %}<span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>{% endif %}
+                    </th>
+
+                    <th class="sortable" onclick="applySort('voucher_id')">
+                        伝票番号
+                        {% if current_filters.sort == 'voucher_id' %}<span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>{% endif %}
+                    </th>
+
+                    <th class="sortable" onclick="applySort('dept_code')">
+                        部門
+                        {% if current_filters.sort == 'dept_code' %}<span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>{% endif %}
+                    </th>
+
+                    <th class="sortable" onclick="applySort('dept_name')">
+                        部門名
+                        {% if current_filters.sort == 'dept_name' %}<span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>{% endif %}
+                    </th>
+
+                    <th class="sortable" onclick="applySort('center')">
+                        センター
+                        {% if current_filters.sort == 'center' %}<span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>{% endif %}
+                    </th>
+
+                    <th class="sortable" onclick="applySort('delivery_date')">
+                        納品日
+                        {% if current_filters.sort == 'delivery_date' %}<span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>{% endif %}
+                    </th>
+
+                    <th class="sortable" onclick="applySort('vendor_code')">
+                        ベンダー
+                        {% if current_filters.sort == 'vendor_code' %}<span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>{% endif %}
+                    </th>
+
+                    <th class="sortable" onclick="applySort('vendor')">
+                        取引先
+                        {% if current_filters.sort == 'vendor' %}<span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>{% endif %}
+                    </th>
+
+                    <th class="sortable" onclick="applySort('p_name')">
+                        品名 (1行目)
+                        {% if current_filters.sort == 'p_name' %}<span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>{% endif %}
+                    </th>
+
+                    <th class="sortable" onclick="applySort('manufacturer')">
+                        メーカー
+                        {% if current_filters.sort == 'manufacturer' %}<span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>{% endif %}
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for info in vouchers %}
+                <tr>
+                    <td class="check-col"><input type="checkbox" name="v_ids" value="{{ info.voucher_id }}"></td>
+
+                    <td class="text-center" style="font-size:0.8em; color:#666;">{{ info.import_id }}</td>
+
+                    <td class="text-center">
+                        <a href="#" onclick="openDetailWindow('{{ url_for('dc_in.voucher_detail', v_id=info.voucher_id) }}'); return false;">
+                            <strong>{{ info.voucher_id }}</strong>
+                        </a>
+                    </td>
+
+                    <td class="text-center">{{ info.dept_code }}</td>
+                    <td>{{ info.dept_name }}</td>
+
+                    <td class="text-center">{{ info.center }}</td>
+                    <td class="text-center">{{ info.delivery_date }}</td>
+
+                    <td class="text-center">{{ info.vendor_code }}</td>
+                    <td>{{ info.vendor }}</td>
+
+                    <td>{{ info.first_p_name }}</td>
+                    <td>{{ info.manufacturer }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="print-voucher-area">
+            <button type="submit" class="print-btn">🖨️ チェックした伝票の帳票(PDF)を出力する</button>
+        </div>
+    </form>
+
+    <br>
+    <div style="text-align: center;">
+        <a href="{{ url_for('dc_in.home') }}">トップ(アップロード画面)へ戻る</a>
+    </div>
+</body>
+</html>
