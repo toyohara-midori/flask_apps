@@ -8,8 +8,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='common.css') }}">
 </head>
 <body class="bg-light">
+      <!-- ★★ tempo_base.html を include する★★ -->
+    {% include 'tempo_base.html' %}
     <div class="container py-4">
-	<div class="title-area d-flex align-items-center gap-2">
+	      <div class="title-area d-flex align-items-center gap-2">
           <h2 class="mb-4">滞留カゴ車登録</h2>
           <img src="{{ url_for('cart_stay_register.static', filename='img/usagi_tambourine.gif') }}">
         </div>
@@ -106,6 +108,21 @@
   const chkCucdUrl = "{{ url_for('cart_stay_register.api_chk_cucd') }}";
   const regCartUrl = "{{ url_for('cart_stay_register.api_register_cart') }}";
   const chkDateUrl = "{{ url_for('cart_stay_register.api_check_date') }}";
+
+// 60秒ごとにログイン状態をチェック
+setInterval(async () => {
+    try {
+        const res = await fetch("/auth/check_session");
+        const data = await res.json();
+
+        if (!data.logged_in) {
+            // ★ セッション切れ → ログインページへ飛ばす
+            window.location.href = "/auth/login";
+        }
+    } catch (e) {
+        console.error("セッションチェック失敗:", e);
+    }
+}, 60000); // 60秒
 
 // 店舗CD入力オートコンプリート用処理
 (async function() {
@@ -550,7 +567,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
 });
-
+console.log("session check JS loaded");  // ★確認用
 </script>
 </body>
 

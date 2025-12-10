@@ -5,6 +5,7 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from flask import Flask, request
+from datetime import timedelta
 
 # サブアプリをインポート(Blueprint を読み込む)
 from autosupply_web import autosupply_bp  # autosupply_web/__init__.py
@@ -13,6 +14,7 @@ from cart_result import cart_result_bp  # cart_result/__init__.py
 
 from hacfl import hacfl_bp
 from tools import tools_bp
+from auth import auth_bp    # 社員番号と店舗CDでログイン認証
 
 class PrefixMiddleware(object):
     def __init__(self, app, prefix=''):
@@ -31,8 +33,11 @@ class PrefixMiddleware(object):
 
         return self.app(environ, start_response)
 
-# メインFlaskサーバ
-app = Flask(__name__)
+# メインFlaskサーバ。店舗共通テンプレを採用するための仕組みを追加
+#app = Flask(__name__)
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))  # main_server フォルダ
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))  # C:\flask_apps\
+app = Flask(__name__, template_folder=os.path.join(ROOT_DIR, "templates"))
 
 #セッションキー作成
 app.secret_key = "secret_key_12345"
@@ -46,6 +51,8 @@ app.register_blueprint(cart_result_bp, url_prefix="/cart_result")
 
 app.register_blueprint(hacfl_bp, url_prefix="/hacfl")
 app.register_blueprint(tools_bp, url_prefix="/tools")
+app.register_blueprint(auth_bp, url_prefix="/auth")
+
 # DBG
 @app.route("/__debug_static_main__")
 def debug_static_main():

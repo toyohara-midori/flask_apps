@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from common.cucd_logic import get_cucd_list, check_cucd
 from common.db_connection import get_connection
 from datetime import date, datetime
+from auth.auth_utils import login_required
 
 # Blueprint登録
 cart_bp = Blueprint(
@@ -16,7 +17,8 @@ cart_bp = Blueprint(
 # 滞留カゴ車登録画面 表示
 # -------------------------
 @cart_bp.route("/", methods=["GET"])
-def index():
+@login_required
+def cart_stay_index():
     today_str = date.today().strftime("%Y-%m-%d")
     return render_template(
         "cart_stay_register.html",
@@ -30,6 +32,7 @@ def index():
     )
 
 @cart_bp.route("/api/cart_category_list")
+@login_required
 def api_category_list():
     sql = "SELECT catcd, catname FROM dbo.CartCategory ORDER BY catcd"
     with get_connection("SQLS08-14") as conn:
@@ -43,6 +46,7 @@ def api_category_list():
 # 日付入力処理
 # -------------------------
 @cart_bp.route("/api/check_date", methods=["POST"])
+@login_required
 def api_check_date():
     payload = request.get_json(force=True) or {}
     cucd = (payload.get("cucd") or "").strip()
@@ -94,6 +98,7 @@ def api_check_date():
 # 登録ボタン処理
 # -------------------------
 @cart_bp.route("/api/register_cart", methods=["POST"])
+@login_required
 def api_register_cart():
     payload = request.get_json(force=True) or {}
     cucd = (payload.get("cucd") or "").strip()
@@ -172,10 +177,12 @@ def exit_page():
 # common のAPI
 # -------------------------
 @cart_bp.route("/api/cucd_list")
+@login_required
 def api_cucd_list():
     return jsonify(get_cucd_list())
 
 @cart_bp.route("/api/chk_cucd", methods=["POST"])
+@login_required
 def api_chk_cucd():
     payload = request.get_json(force=True) or {}
     cucd = payload.get("cucd", "")
