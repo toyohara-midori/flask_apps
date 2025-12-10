@@ -5,6 +5,7 @@ from flask import (
 from . import auth_bp
 from .ip_utils import extract_store_from_ip
 from .db_auth import authenticate_employee
+from common.cucd_logic import check_cucd
 import time
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -17,6 +18,16 @@ def login():
     if not store_cd:
         error = "店舗CDが取得できません"
 
+    # ③店舗CDが実在するかチェック（★初回表示時のみ）
+    chk = check_cucd(store_cd)
+    if not chk.get("ok", False):
+        return render_template(
+            "auth/login.html",
+            store_cd="",
+            error=f"店舗CD {store_cd} は存在しません（{chk.get('msg', '')}）"
+        )
+
+    # POST(ログインボタン押下時)
     if request.method == "POST":
         # ★ POST のときだけ name を探す
         emp_no_key = next((k for k in request.form.keys() if k.startswith("emp_no_")), None)
