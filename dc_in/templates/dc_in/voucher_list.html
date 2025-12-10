@@ -245,6 +245,17 @@
             margin-bottom: 5px;
             text-align: right;
         }
+
+        /* フィルタエリア内のセレクトボックス共通設定 */
+        .filter-group select {
+            padding: 2px;
+            height: 28px;
+            font-size: 13px;
+            /* 以下を追加: 文字が長すぎる場合に ... で省略する */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
     </style>
     <script>
         function openDetailWindow(url) {
@@ -354,7 +365,8 @@
     <h3 style="margin: 10px 0;">DC入荷伝票一覧</h3>
 
     <div class="id-search">
-        <form method="POST" style="display:inline;">
+        <form method="POST" style="display:inline;" target="_blank">
+
             <input type="text" name="voucher_id" placeholder="例: 600101" required style="padding:2px 5px; font-size:13px;">
             <button type="submit" class="primary">番号検索</button>
         </form>
@@ -395,19 +407,23 @@
         </div>
         <div class="filter-group">
             <label>部門</label>
-            <select name="dept">
+            <select name="dept" style="max-width: 180px;">
                 <option value="">全て</option>
                 {% for d in depts %}
-                <option value="{{ d }}" {% if current_filters.dept==d %}selected{% endif %}>{{ d }}</option>
+                <option value="{{ d.code }}" {% if current_filters.dept==d.code %}selected{% endif %}>
+                    {{ d.label }}
+                </option>
                 {% endfor %}
             </select>
         </div>
         <div class="filter-group">
             <label>取引先</label>
-            <select name="vendor" style="max-width: 150px;">
+            <select name="vendor" style="max-width: 220px;">
                 <option value="">全て</option>
                 {% for v in vendors %}
-                <option value="{{ v }}" {% if current_filters.vendor==v %}selected{% endif %}>{{ v }}</option>
+                <option value="{{ v.code }}" {% if current_filters.vendor==v.code %}selected{% endif %}>
+                    {{ v.label }}
+                </option>
                 {% endfor %}
             </select>
         </div>

@@ -2,182 +2,322 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>伝票詳細</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>伝票詳細: {{ voucher_id }}</title>
     <style>
+        :root {
+            --primary-color: #0056b3; /* 濃い青 (メインカラー) */
+            --bg-color: #f4f7f9; /* 背景色 */
+            --text-color: #333; /* 基本文字色 */
+            --border-color: #ddd; /* 枠線 */
+            --header-bg: #e9ecef; /* テーブルヘッダ背景 */
+        }
+
         body {
-            font-family: sans-serif;
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
             padding: 20px;
-            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
         }
 
-        .voucher-container {
+        /* メインコンテナ */
+        .voucher-card {
             background: white;
-            padding: 20px;
-            border: 1px solid #ccc;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-            display: inline-block;
-            min-width: 800px;
+            width: 100%;
+            max-width: 1200px; /* 横幅を広げすぎない */
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); /* 柔らかい影 */
+            padding: 30px;
+            box-sizing: border-box;
         }
 
-        .header-info {
-            border-bottom: 2px solid #007bff;
-            padding-bottom: 15px;
+        /* ヘッダーエリア */
+        .header-section {
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        .page-title {
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            color: var(--primary-color);
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge {
+            background-color: var(--primary-color);
+            color: white;
+            font-size: 14px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            vertical-align: middle;
+        }
+
+        /* 情報グリッド (2カラム〜4カラムでレスポンシブに) */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px 30px;
             margin-bottom: 20px;
         }
 
-        .header-row {
-            margin-bottom: 8px;
-            font-size: 15px;
+        .info-item {
+            display: flex;
+            flex-direction: column;
         }
 
-        .header-label {
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
             font-weight: bold;
-            color: #555;
-            margin-right: 10px;
-            display: inline-block;
-            width: 120px;
         }
 
-        .summary-area {
-            background-color: #eef;
-            padding: 10px 20px;
-            border-radius: 5px;
+        .info-value {
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        /* 合計金額エリア */
+        .summary-card {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px 25px;
             display: flex;
             justify-content: flex-end;
-            gap: 30px;
-            font-size: 16px;
-            font-weight: bold;
-            margin-top: 15px;
+            align-items: center;
+            gap: 40px;
+            margin-top: 10px;
         }
 
-        .summary-item span {
+        .summary-group {
+            text-align: right;
+        }
+
+        .summary-label {
+            font-size: 12px;
+            color: #666;
+            display: block;
+        }
+
+        .summary-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary-color);
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .summary-sub-value {
             font-size: 18px;
-            color: #000;
+            font-weight: bold;
+            color: #555;
+        }
+
+        /* テーブル */
+        .table-responsive {
+            overflow-x: auto; /* 画面が狭い時は横スクロール */
         }
 
         table {
-            width: auto;
+            width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
             font-size: 13px;
         }
 
-        th, td {
-            border: 1px solid #ccc;
-            padding: 5px 10px;
-            vertical-align: middle;
+        thead th {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: normal;
+            padding: 10px 8px;
+            text-align: center;
             white-space: nowrap;
         }
 
-        th {
-            background-color: #f2f2f2;
-            text-align: center;
+            /* 最初の角を丸くする小技 */
+            thead th:first-child {
+                border-top-left-radius: 4px;
+            }
+
+            thead th:last-child {
+                border-top-right-radius: 4px;
+            }
+
+        tbody td {
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
         }
 
+        /* 縞模様とホバー効果 */
+        tbody tr:nth-child(even) {
+            background-color: #fcfcfc;
+        }
+
+        tbody tr:hover {
+            background-color: #eef6ff;
+            transition: 0.2s;
+        }
+
+        /* 数字列のスタイル */
         .num-col {
             text-align: right;
-            font-family: monospace;
+            font-family: 'Roboto Mono', monospace;
+            font-weight: 500;
         }
 
         .row-index {
             text-align: center;
-            font-family: monospace;
-            color: #555;
+            color: #888;
         }
 
-        .btn {
-            display: inline-block;
-            padding: 8px 20px;
-            background: #666;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 4px;
-            margin-top: 20px;
+        /* フッターボタンエリア */
+        .footer-actions {
+            margin-top: 40px;
+            text-align: center;
         }
 
-            .btn:hover {
-                background-color: #555;
+        .btn-close {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 40px;
+            font-size: 16px;
+            border-radius: 30px; /* 丸みのあるボタン */
+            cursor: pointer;
+            transition: background-color 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+            .btn-close:hover {
+                background-color: #5a6268;
+                transform: translateY(-1px);
             }
+
+        /* エラー表示 */
+        .error-box {
+            color: #721c24;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 20px;
+            border-radius: 5px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
 
-    <div class="voucher-container">
+    <div class="voucher-card">
         {% if data %}
-        <div class="header-info">
-            <div class="header-row">
-                <span class="header-label">入庫伝票番号:</span> {{ voucher_id }}
-            </div>
-            <div class="header-row">
-                <span class="header-label">値引伝票番号:</span> {{ data.discount_id }}
-            </div>
-            <div class="header-row">
-                <span class="header-label">センター:</span> {{ data.center }}
-            </div>
-            <div class="header-row">
-                <span class="header-label">部門:</span> {{ data.dept_code }} {{ data.dept_name }}
-            </div>
-            <div class="header-row">
-                <span class="header-label">納品日:</span> {{ data.delivery_date }}
-            </div>
-            <div class="header-row">
-                <span class="header-label">取引先:</span> {{ data.vendor_code }} {{ data.vendor }}
-            </div>
-            <div class="header-row">
-                <span class="header-label">作業者:</span> {{ data.operator }}
+        <div class="header-section">
+            <h1 class="page-title">
+                入庫伝票詳細
+                <span class="badge">{{ voucher_id }}</span>
+            </h1>
+
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">センター</span>
+                    <span class="info-value">{{ data.center }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">部門</span>
+                    <span class="info-value">{{ data.dept_code }} : {{ data.dept_name }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">取引先</span>
+                    <span class="info-value">{{ data.vendor_code }} <br> {{ data.vendor }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">納品日</span>
+                    <span class="info-value">{{ data.delivery_date }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">作業者</span>
+                    <span class="info-value">{{ data.operator }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">値引伝票番号</span>
+                    <span class="info-value" style="{{ 'color: #cc0000; font-weight:bold;' if data.discount_id else 'color:#ccc;' }}">
+                        {{ data.discount_id if data.discount_id else 'なし' }}
+                    </span>
+                </div>
             </div>
 
-            <div class="summary-area">
-                <div class="summary-item">合計ケース: <span>{{ data.total_cases }}</span> cs</div>
-                <div class="summary-item">合計原価: &yen;<span>{{ data.total_cost }}</span></div>
+            <div class="summary-card">
+                <div class="summary-group">
+                    <span class="summary-label">合計ケース数</span>
+                    <span class="summary-sub-value">{{ data.total_cases }} <small>cs</small></span>
+                </div>
+                <div style="width: 1px; height: 30px; background: #ddd;"></div>
+                <div class="summary-group">
+                    <span class="summary-label">原価合計 (税抜)</span>
+                    <span class="summary-value">&yen; {{ data.total_cost }}</span>
+                </div>
             </div>
         </div>
 
-        <h3>【明細内容】</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>行</th>
-                    <th>商品CD</th>
-                    <th>JANCD</th>
-                    <th>商品名</th>
-                    <th>規格</th>
-                    <th>メーカー</th>
-                    <th>入数</th>
-                    <th>バラ</th>
-                    <th>ケース</th>
-                    <th>原単価</th>
-                    <th>原価合計</th>
-                    <th>値引額</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in data.details %}
-                <tr>
-                    <td class="row-index">{{ loop.index }}</td>
-                    <td>{{ item.p_code }}</td>
-                    <td>{{ item.jan }}</td>
-                    <td>{{ item.p_name }}</td>
-                    <td>{{ item.spec }}</td>
-                    <td>{{ item.manufacturer }}</td>
-                    <td class="num-col">{{ item.per_case }}</td>
-                    <td class="num-col">{{ item.loose }}</td>
-                    <td class="num-col">{{ item.case }}</td>
-                    <td class="num-col">{{ item.cost }}</td>
-                    <td class="num-col">&yen; {{ item.row_total }}</td>
-                    <td class="num-col">&yen; {{ item.discount }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <h3>明細リスト</h3>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th width="40">No.</th>
+                        <th>商品コード</th>
+                        <th>JANコード</th>
+                        <th>商品名 / 規格</th>
+                        <th>メーカー</th>
+                        <th>入数</th>
+                        <th>バラ</th>
+                        <th>ケース</th>
+                        <th>原単価</th>
+                        <th>原価合計</th>
+                        <th>値引額</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in data.details %}
+                    <tr>
+                        <td class="row-index">{{ loop.index }}</td>
+                        <td>{{ item.p_code }}</td>
+                        <td>{{ item.jan }}</td>
+                        <td>
+                            <div style="font-weight:bold;">{{ item.p_name }}</div>
+                            <div style="font-size:11px; color:#666;">{{ item.spec }}</div>
+                        </td>
+                        <td>{{ item.manufacturer }}</td>
+                        <td class="num-col">{{ item.per_case }}</td>
+                        <td class="num-col" style="color:#888;">{{ item.loose }}</td>
+                        <td class="num-col" style="font-weight:bold;">{{ item.case }}</td>
+                        <td class="num-col">{{ item.cost }}</td>
+                        <td class="num-col" style="color: var(--primary-color);">&yen; {{ item.row_total }}</td>
+                        <td class="num-col" style="{{ 'color:red;' if item.discount != '0' else 'color:#ccc;' }}">
+                            {{ item.discount }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
         {% else %}
-        <h2 style="color: red;">エラー</h2>
-        <p>指定された伝票番号 ({{ voucher_id }}) のデータは存在しません。</p>
+        <div class="error-box">
+            <h2>データが見つかりません</h2>
+            <p>指定された伝票番号 ({{ voucher_id }}) のデータは存在しないか、削除された可能性があります。</p>
+        </div>
         {% endif %}
 
-        <br>
-        <a href="{{ url_for('dc_in.voucher_list') }}" class="btn">一覧へ戻る</a>
+        <div class="footer-actions">
+            <button onclick="window.close()" class="btn-close">× 閉じる</button>
+        </div>
     </div>
 
 </body>

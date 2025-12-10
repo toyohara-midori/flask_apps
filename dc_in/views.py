@@ -2,9 +2,13 @@ from flask import render_template, request, redirect, url_for, make_response
 import datetime
 import io
 import csv
+import uuid
+from itertools import groupby
 
 from . import dc_in_bp as bp
 from common import dc_in_db_logic as db_logic
+
+TEMP_DATA_STORE = {}
 
 # ==========================================
 # ルート定義
@@ -16,7 +20,107 @@ def home():
 
 @bp.route('/confirm', methods=['POST'])
 def show_confirmation():
-    return render_template('dc_in/confirm.html', headers=[], center_groups={}, global_summary=[])
+    # 1. ユーザー情報の取得 (ダミー)
+    raw_user = "JASON\\fujiname"
+    current_user_id = raw_user.split('\\')[1] if '\\' in raw_user else raw_user
+
+    # 2. ファイルチェック
+    if 'file' not in request.files:
+        return "ファイルがありません", 400
+    file = request.files['file']
+    if file.filename == '':
+        return "ファイル名がありません", 400
+
+    # 3. CSV読み込み
+    try:
+        stream = io.StringIO(file.stream.read().decode("cp932"), newline=None)
+        csv_input = csv.reader(stream)
+        rows = list(csv_input)
+    except Exception as e:
+        return f"CSV読み込みエラー: {e}", 500
+
+    # 4. DBロジック呼び出し（データ補完 ＆ エラーチェック）
+    try:
+        enriched_list, error_msgs = db_logic.process_upload_csv(rows)
+    except Exception as e:
+        return f"システムエラー: {e}", 500
+
+    # ==========================================
+    # ★ エラーチェック分岐
+    # ==========================================
+    if error_msgs:
+        # エラーがある場合は、index.html に戻してエラーを表示
+        return render_template('dc_in/index.html', error_list=error_msgs)
+
+    # ==========================================
+    # ★ 正常時の処理 (ここが抜けていた可能性があります)
+    # ==========================================
+    
+    # A. 一時保存 (Batch ID生成)
+    batch_id = str(uuid.uuid4())
+    TEMP_DATA_STORE[batch_id] = {
+        'data': enriched_list,
+        'user': current_user_id
+    }
+
+    # B. 画面表示用にグルーピング (センター > 納品日 > ベンダー > 部門)
+    # 並び替え
+    key_func = lambda x: (x['center_name'], x['delivery_date'], x['vendor_code'], x['dept_code'])
+    enriched_list.sort(key=key_func)
+
+    center_groups = {} # ★ここで定義します
+
+    # センターで大分類
+    for center, items_in_center in groupby(enriched_list, key=lambda x: x['center_name']):
+        group_list = []
+        # (日付, ベンダー, 部門) で小分類
+        sub_key = lambda x: (x['delivery_date'], x['vendor_code'], x['dept_code'])
+        
+        center_items_list = list(items_in_center)
+        center_items_list.sort(key=sub_key)
+
+        for (d_date, v_code, dept_code), items in groupby(center_items_list, key=sub_key):
+            items = list(items)
+            first = items[0]
+            
+            group_obj = {
+                'delivery_date': d_date,
+                'vendor_code': v_code,
+                'vendor_name': first['vendor_name'],
+                'dept_code': dept_code,
+                'dept_name': first['dept_name'],
+                'details': [item['detail_row'] for item in items]
+            }
+            group_list.append(group_obj)
+        
+        center_groups[center] = group_list
+
+    # C. 全体集計 (JVかそれ以外か)
+    global_summary = [] # ★ここで定義します
+    
+    sum_key = lambda x: (x['center_name'], x['delivery_date'])
+    enriched_list.sort(key=sum_key)
+    
+    for (center, d_date), items in groupby(enriched_list, key=sum_key):
+        items = list(items)
+        # JV判定 (メーカー名の先頭がJVかどうか)
+        jv_count = sum(item['raw_case'] for item in items if str(item['manufacturer']).startswith('JV'))
+        other_count = sum(item['raw_case'] for item in items if not str(item['manufacturer']).startswith('JV'))
+        
+        global_summary.append({
+            'center': center,
+            'date': d_date,
+            'jv': jv_count,
+            'other': other_count
+        })
+
+    # D. 確認画面の表示
+    return render_template(
+        'dc_in/confirm.html', 
+        center_groups=center_groups, 
+        global_summary=global_summary,
+        import_id=batch_id
+    )
 
 @bp.route('/complete_insertion', methods=['POST'])
 def complete_insertion():
@@ -26,10 +130,39 @@ def complete_insertion():
 
 @bp.route('/voucher_list', methods=['GET', 'POST'])
 def voucher_list():
+    # --- ★ここから：検索ボタン（POST）が押されたときの処理 ---
     if request.method == 'POST':
-        # ... (POST処理省略) ...
-        pass
+        search_id = request.form.get('voucher_id')
 
+        # 1. 空文字チェック (HTMLのrequiredが効かなかった場合の保険)
+        if not search_id or not search_id.strip():
+             return f"""
+            <div style="padding: 20px; font-family: sans-serif;">
+                <h3 style="color: red;">エラー</h3>
+                <p>伝票番号が入力されていません。</p>
+                <button onclick="window.close()">閉じる</button>
+            </div>
+            """
+
+        # 2. DB検索
+        target_data = db_logic.get_voucher_detail(search_id)
+
+        if target_data:
+            # 3. 見つかったら詳細画面へリダイレクト（別タブで開く）
+            return redirect(url_for('dc_in.voucher_detail', v_id=search_id))
+        else:
+            # 4. 見つからなかったらエラー画面を返す（別タブに表示される）
+            return f"""
+            <div style="padding: 20px; font-family: sans-serif;">
+                <h3 style="color: red;">該当なし</h3>
+                <p>伝票番号 <strong>{search_id}</strong> は見つかりませんでした。</p>
+                <button onclick="window.close()">閉じる</button>
+            </div>
+            """
+    # --- ★ここまでが追加・変更部分 ---
+
+
+    # --- 以下、既存の一覧表示ロジック（そのまま） ---
     filters = {
         'import_id': request.args.get('import_id'),
         'center': request.args.get('center'),
@@ -44,10 +177,10 @@ def voucher_list():
     if not filters['delivery_date'] and not filters['import_id']:
         filters['delivery_date'] = datetime.date.today().strftime('%Y/%m/%d')
 
-    # ★画面用: 1行目だけ取得 (is_export=False)
     vouchers = db_logic.get_voucher_list(filters, is_export=False)
     opts = db_logic.get_filter_options()
 
+    # ※error変数は使わなくなったので削除しました
     return render_template(
         'dc_in/voucher_list.html', 
         vouchers=vouchers, 
@@ -216,11 +349,57 @@ def download_list_pdf():
 
 @bp.route('/download_voucher_pdf', methods=['POST'])
 def download_voucher_pdf():
-    dummy_content = "帳票PDFデータ"
-    output = make_response(dummy_content)
-    output.headers["Content-Disposition"] = "attachment; filename=vouchers.pdf"
-    output.headers["Content-type"] = "application/pdf"
-    return output
+    # 1. 選択されたID
+    selected_ids = request.form.getlist('v_ids')
+    if not selected_ids:
+        return redirect(url_for('dc_in.voucher_list'))
+
+    # 2. データ取得
+    filters = {'voucher_ids': selected_ids}
+    blue_vouchers_raw = db_logic.get_voucher_list(filters, is_export=True)
+    red_vouchers_raw = db_logic.get_related_discount_vouchers(selected_ids) or []
+
+    # 3. 行データを「伝票単位（リストのリスト）」にまとめる処理
+    
+    # --- A. 青（仕入）を伝票IDごとにまとめる ---
+    # groupbyを使うため、まずはID順にソート
+    blue_vouchers_raw.sort(key=lambda x: x['voucher_id'])
+    
+    blue_dict = {} # Key: 仕入伝票ID, Value: [行データのリスト]
+    for vid, rows in groupby(blue_vouchers_raw, key=lambda x: x['voucher_id']):
+        blue_dict[vid] = list(rows)
+
+    # --- B. 赤（値引）を親IDごとにまとめる ---
+    # 赤伝票は "parent_id" (deno11) が青伝票との紐付けキーです
+    red_vouchers_raw.sort(key=lambda x: x['parent_id'])
+    
+    red_dict_by_parent = {} # Key: 親(仕入)伝票ID, Value: [行データのリスト]
+    for pid, rows in groupby(red_vouchers_raw, key=lambda x: x['parent_id']):
+        # 1つの親IDに対して、赤伝票は通常1枚ですが、念のためリスト化して保持
+        # ここでは「赤伝票の明細行すべて」をリストにします
+        red_dict_by_parent[pid] = list(rows)
+
+    # 4. ページデータの作成
+    # 構造: [ [青伝票の行リスト, 赤伝票の行リスト], [青伝票の行リスト], ... ]
+    print_pages = []
+
+    # 青伝票（親）を基準にループ
+    for vid in sorted(blue_dict.keys()):
+        # 1ページに含まれる伝票リスト（最初は青だけ）
+        current_page_vouchers = []
+        
+        # 1. 青伝票を追加
+        current_page_vouchers.append(blue_dict[vid])
+        
+        # 2. 紐付く赤伝票があれば追加（これで青→赤の順序確定）
+        if vid in red_dict_by_parent:
+            current_page_vouchers.append(red_dict_by_parent[vid])
+            
+        # ページリストに追加
+        print_pages.append(current_page_vouchers)
+
+    # 5. テンプレートへ
+    return render_template('dc_in/print_list.html', pages=print_pages)
 
 @bp.route('/sample_complete')
 def sample_complete():

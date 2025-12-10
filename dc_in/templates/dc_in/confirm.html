@@ -351,6 +351,8 @@
 
         <div class="action-buttons">
             <form method="POST" action="{{ url_for('dc_in.complete_insertion') }}" style="display: inline;">
+                <input type="hidden" name="import_id" value="{{ import_id }}">
+
                 <button type="submit" class="confirm-btn">登録を実行</button>
             </form>
 

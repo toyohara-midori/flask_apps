@@ -2,110 +2,389 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>DC入荷伝票一覧(印刷用)</title>
+    <title>仕入伝票印刷</title>
     <style>
+        /* --- 基本設定 --- */
         body {
-            font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
-            font-size: 10px; /* 印刷用に少し小さく */
+            background-color: #555;
+            font-family: "MS Gothic", "Hiragino Kaku Gothic ProN", sans-serif;
+            margin: 0;
             padding: 20px;
         }
 
-        h2 {
-            text-align: center;
-            margin-bottom: 10px;
+        /* A4縦 1ページ分のコンテナ */
+        .page-container {
+            width: 210mm;
+            height: 296mm;
+            background: white;
+            margin: 0 auto 10mm auto;
+            padding: 10mm; /* 紙の端からの余白 */
+            box-sizing: border-box;
+            position: relative;
+            page-break-after: always;
         }
 
-        .meta-info {
-            text-align: right;
-            margin-bottom: 5px;
+            .page-container:last-child {
+                page-break-after: auto;
+            }
+
+        /* 伝票1枚分の枠 (高さ固定) */
+        .slip-box {
+            width: 100%;
+            height: 135mm; /* A4縦の半分弱 */
+            margin-bottom: 5mm;
+            border: 2px solid #0088cc;
+            color: #004488;
             font-size: 11px;
+            box-sizing: border-box;
+            position: relative;
+            overflow: hidden; /* はみ出し防止 */
         }
 
-        table {
+        /* --- ヘッダーエリア (高さ削減) --- */
+        .slip-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 10px; /* 上下paddingなし */
+            height: 24px; /* 高さを詰める */
+            border-bottom: 1px solid currentColor;
+        }
+
+        .slip-title {
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            letter-spacing: 5px;
+            flex-grow: 1;
+            line-height: 1; /* 行間を詰める */
+        }
+
+        /* --- 情報グリッドエリア (レイアウト修正) --- */
+        .info-grid {
+            display: flex;
+            width: 100%;
+            border-bottom: 1px solid currentColor;
+            /* height固定を削除し、コンテンツに合わせるが、最大高を意識 */
+            min-height: 55px;
+        }
+
+        .info-left {
+            width: 30%;
+            padding: 2px 5px;
+            border-right: 1px solid currentColor;
+            font-size: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .info-right {
+            width: 70%;
+            padding: 2px 5px;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+        }
+
+        /* コード枠のデザイン */
+        .code-box {
+            border: 1px solid currentColor;
+            padding: 0 4px;
+            margin: 1px;
+            text-align: center;
+            display: inline-block;
+            min-width: 30px;
+            height: 14px;
+            line-height: 14px;
+            font-weight: bold;
+            font-size: 11px;
+            background: rgba(255,255,255,0.5);
+        }
+
+        .label {
+            font-size: 9px;
+            color: inherit;
+            margin-right: 2px;
+        }
+
+        .value {
+            font-size: 12px;
+            font-weight: bold;
+            color: #000;
+        }
+
+        /* --- 明細テーブル (行高を広げる) --- */
+        table.detail-table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
+            margin-top: 2px;
         }
 
-        th, td {
-            border: 1px solid #333;
-            padding: 4px;
-            text-align: left;
-            vertical-align: middle;
-        }
-
-        th {
-            background-color: #f0f0f0;
-            text-align: center;
-            white-space: nowrap;
-        }
-        /* 印刷時にボタンを消す */
-        @media print {
-            .no-print {
-                display: none;
+            table.detail-table th, table.detail-table td {
+                border: 1px solid currentColor;
+                padding: 0 4px;
+                text-align: center;
+                vertical-align: middle;
+                white-space: nowrap;
+                overflow: hidden;
+                font-size: 11px;
             }
+
+            /* ヘッダー行 */
+            table.detail-table th {
+                background-color: #e6f7ff;
+                font-weight: normal;
+                font-size: 9px;
+                height: 20px; /* ヘッダーは低く */
+                color: inherit;
+            }
+
+            /* データ行 ★ここを広げてメーカー名を表示させる */
+            table.detail-table td {
+                height: 34px; /* ここを確保するために他を削った */
+            }
+
+        /* 列幅調整 */
+        .col-name {
+            width: 35%;
+            text-align: left !important;
         }
 
-        .num-col {
-            text-align: right;
+        .col-code {
+            width: 14%;
         }
 
-        .center-col {
-            text-align: center;
+        .col-case {
+            width: 6%;
+        }
+
+        .col-unit {
+            width: 5%;
+        }
+
+        .col-qty {
+            width: 8%;
+        }
+
+        .col-price {
+            width: 10%;
+            text-align: right !important;
+        }
+
+        /* --- フッター --- */
+        .slip-footer-area {
+            position: absolute;
+            bottom: 2px;
+            left: 5px;
+            right: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            font-size: 10px;
+        }
+
+        .hanko-area {
+            display: flex;
+            gap: 2px;
+        }
+
+        .hanko-box {
+            width: 35px;
+            height: 35px;
+            border: 1px solid currentColor;
+            background: white;
+        }
+
+        /* --- 赤伝（値引）モード --- */
+        .type-red {
+            border-color: #cc0000 !important;
+            color: #cc0000 !important;
+        }
+
+            .type-red th {
+                background-color: #ffe6e6 !important;
+            }
+
+            .type-red .code-box,
+            .type-red .hanko-box,
+            .type-red table td,
+            .type-red table th {
+                border-color: #cc0000 !important;
+            }
+
+        /* 印刷時の設定 */
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
+
+            body {
+                background-color: white;
+                margin: 0;
+                padding: 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .page-container {
+                width: 100%;
+                margin: 0;
+                box-shadow: none;
+                transform: scale(0.98);
+                transform-origin: top center;
+            }
+
+            .no-print {
+                display: none !important;
+            }
         }
     </style>
 </head>
 <body>
 
-    <div class="no-print" style="text-align: right; margin-bottom: 10px;">
-        <button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">🖨️ このページを印刷（PDF保存）</button>
-        <button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">閉じる</button>
+    <div class="no-print" style="text-align: center; margin-bottom: 20px;">
+        <button onclick="window.print()" style="padding: 10px 30px; font-size: 16px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px;">
+            🖨️ 印刷する
+        </button>
+        <div style="color: white; margin-top:5px;">A4縦 / 余白「なし」推奨</div>
     </div>
 
-    <h2>DC入荷伝票一覧</h2>
+    {% macro render_slip(head, lines) %}
+    {% set total_cost = lines|sum(attribute='cost_price') %}
+    {% set is_red = (head.kubun == '13') or (head.total_disc|int < 0) or (total_cost < 0) %}
 
-    <div class="meta-info">
-        出力日:
-        <script>document.write(new Date().toLocaleDateString());</script>
-        {% if current_filters.delivery_date %} | 納品日指定: {{ current_filters.delivery_date }}{% endif %}
-        {% if current_filters.center %} | センター: {{ current_filters.center }}{% endif %}
+    <div class="slip-box {{ 'type-red' if is_red else '' }}">
+
+        <div class="slip-header">
+            <div style="font-style:italic; font-weight:bold; font-size:14px;">EOSQ00</div>
+            <div class="slip-title">{{ '値 引 伝 票 (赤伝)' if is_red else '仕 入 伝 票' }}</div>
+            <div style="border:1px solid currentColor; padding:0 3px; font-size:10px;">訂正区分: 無</div>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-left">
+                <div>
+                    <span class="label">社名</span> <span class="value">KK ジェーソン</span>
+                </div>
+                <div>
+                    <span class="label">店名</span> <span class="value">{{ head.dept_name }}</span>
+                </div>
+            </div>
+
+            <div class="info-right">
+                <div style="display:flex; width:100%; align-items:center; margin-bottom:2px;">
+                    <span class="label">社・店</span>
+                    <span class="code-box">07 - D03</span>
+                    <span class="label" style="margin-left:5px;">分類</span>
+                    <span class="code-box">05</span>
+                    <span class="label" style="margin-left:5px;">区分</span>
+                    <span class="code-box">{{ '13' if is_red else '11' }}</span>
+                    <span class="label" style="margin-left:5px;">伝票番号</span>
+                    <span class="code-box value" style="min-width:50px;">{{ head.voucher_id }}</span>
+                </div>
+
+                <div style="display:flex; width:100%; align-items:center; margin-bottom:2px;">
+                    <span class="label">発注日</span>
+                    <span class="code-box" style="min-width:60px;">{{ head.order_date }}</span>
+                    <span class="label" style="margin-left:10px;">納品日</span>
+                    <span class="code-box" style="min-width:60px;">{{ head.delivery_date }}</span>
+                </div>
+
+                <div style="width:100%; border-top:1px dashed currentColor; padding-top:1px; margin-top:1px;">
+                    <span class="label">取引先</span>
+                    <span class="code-box">{{ head.vendor_code }}</span>
+                    <span class="value" style="font-size:12px;">{{ head.vendor }}</span>
+                </div>
+            </div>
+        </div>
+
+        <table class="detail-table">
+            <thead>
+                <tr>
+                    <th rowspan="2" class="col-name">品名・規格</th>
+                    <th rowspan="2" class="col-code">商品コード<br>JANコード</th>
+                    <th>入数</th>
+                    <th rowspan="2" class="col-unit">単位</th>
+                    <th rowspan="2" class="col-qty">数量</th>
+                    <th rowspan="2" class="col-price">原単価</th>
+                    <th rowspan="2" class="col-price">原価金額</th>
+                    <th rowspan="2" class="col-price">売単価</th>
+                    <th rowspan="2" class="col-price">売価合計</th>
+                </tr>
+                <tr>
+                    <th class="col-case">ケース</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set ns = namespace(subtotal_cost=0) %}
+                {% for row in lines %}
+                {% set line_val = row.order_qty|int * row.cost_price|int %}
+                {% set ns.subtotal_cost = ns.subtotal_cost + line_val %}
+                <tr>
+                    <td class="col-name" style="text-align:left; padding-left:4px; line-height:1.2;">
+                        <div style="font-weight:bold;">{{ row.first_p_name }}</div>
+                        <div style="font-size:9px;">{{ row.manufacturer }}</div>
+                    </td>
+                    <td class="col-code">
+                        <div>{{ row.item_code }}</div>
+                        <div style="font-size:9px;">{{ row.jan }}</div>
+                    </td>
+                    <td></td>
+                    <td class="col-unit">PC</td>
+                    <td class="col-qty" style="font-weight:bold;">{{ row.order_qty }}</td>
+                    <td class="col-price">{{ "{:.2f}".format(row.cost_price|float) }}</td>
+                    <td class="col-price" style="font-weight:bold;">{{ line_val }}</td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                {% endfor %}
+
+                {% for i in range(6 - lines|length) %}
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                {% endfor %}
+
+                <tr style="border-top: 2px solid currentColor;">
+                    <td colspan="6" style="text-align: right; padding-right:10px;">合計</td>
+                    <td class="col-price" style="font-weight:bold; font-size:12px;">{{ ns.subtotal_cost }}</td>
+                    <td></td>
+                    <td class="col-price"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="slip-footer-area">
+            <div>※消費税は含まれません</div>
+            <div class="hanko-area">
+                <div class="hanko-box"></div>
+                <div class="hanko-box"></div>
+                <div class="hanko-box"></div>
+            </div>
+        </div>
+
     </div>
+    {% endmacro %}
 
-    <table>
-        <thead>
-            <tr>
-                <th>取込ID</th>
-                <th>伝票番号</th>
-                <th>行</th>
-                <th>センター</th>
-                <th>部門</th>
-                <th>取引先</th>
-                <th>商品CD</th>
-                <th>商品名</th>
-                <th>メーカー</th>
-                <th>納品日</th>
-                <th>数量</th>
-                <th>原価</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in vouchers %}
-            <tr>
-                <td class="center-col">{{ row.import_id }}</td>
-                <td class="center-col">{{ row.voucher_id }}</td>
-                <td class="center-col">{{ row.line_no }}</td>
-                <td class="center-col">{{ row.center }}</td>
-                <td>{{ row.dept_name }}</td>
-                <td>{{ row.vendor }}</td>
-                <td class="center-col">{{ row.item_code }}</td>
-                <td>{{ row.first_p_name }}</td>
-                <td>{{ row.manufacturer }}</td>
-                <td class="center-col">{{ row.delivery_date }}</td>
-                <td class="num-col">{{ row.order_qty }}</td>
-                <td class="num-col">{{ row.cost_price }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+
+    {% for page_vouchers in pages %}
+    <div class="page-container">
+        {% for lines in page_vouchers %}
+        {{ render_slip(lines[0], lines) }}
+        {% endfor %}
+    </div>
+    {% endfor %}
 
 </body>
 </html>

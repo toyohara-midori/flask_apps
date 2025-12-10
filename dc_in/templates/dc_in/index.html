@@ -82,6 +82,17 @@
 <body>
     <div class="container">
         <h1>DC入庫発注データアップロード</h1>
+
+        {% if error_list %}
+        <div style="background-color: #ffe6e6; border: 1px solid #ffcccc; color: #cc0000; padding: 15px; margin-bottom: 20px; border-radius: 5px;">
+            <h3 style="margin-top: 0; font-size: 1.2em;">⚠ 以下のエラーを修正してください</h3>
+            <ul style="margin-bottom: 0; padding-left: 20px;">
+                {% for error in error_list %}
+                <li style="margin-bottom: 5px;">{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
         <form method="POST" action="{{ url_for('dc_in.show_confirmation') }}" enctype="multipart/form-data">
             <label for="csv-file">取り込むCSVファイルを選択してください:</label>
             <input type="file" id="csv-file" name="file" accept=".csv" required>

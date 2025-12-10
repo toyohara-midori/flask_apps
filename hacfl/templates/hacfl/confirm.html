@@ -305,16 +305,14 @@
         </table>
     </div>
 
-    <div class="actions">
-        {% if not has_error %}
-        <form method="post" onsubmit="return preventDoubleSubmit(this);">
-            <button type="submit" class="btn-primary" id="btn_register">確定して登録</button>
-        </form>
-        {% endif %}
+    <div class="action-buttons">
+        <form method="POST" action="{{ url_for('dc_in.complete_insertion') }}" style="display: inline;">
+            <input type="hidden" name="import_id" value="{{ import_id }}">
 
-        <a href="{{ url_for('hacfl.index') }}">
-            <button type="button" class="btn-secondary">CSV登録に戻る</button>
-        </a>
+            <button type="submit" class="confirm-btn">登録を実行</button>
+        </form>
+
+        <a href="{{ url_for('dc_in.home') }}" class="back-btn">キャンセルして戻る</a>
     </div>
 
 </body>
