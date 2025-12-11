@@ -19,7 +19,7 @@
         <form method="post" action="{{ url_for('cart_stay_register.api_register_cart') }}">
             
         <div class="row mb-3 position-relative">
-            <label class="col-sm-1 col-form-label">店舗CD</label>
+            <label class="col-sm-1 col-form-label" style=" min-width: 80px;">店舗CD</label>
             <div class="col-sm-3" style="position: relative;">
                 <input id="cucd" name="cucd" type="text" maxlength="3"
                     value="{{ cucd or '' }}" placeholder="例: 123"
@@ -35,53 +35,53 @@
             </div>
 
             <div class="row mb-3">
-              <label class="col-sm-1 col-form-label">日付</label>
+              <label class="col-sm-1 col-form-label" style=" min-width: 80px;">日付</label>
               <div class="col-sm-2">
-                <input type="date" class="form-control" name="date" id="date"
+                <input type="date" class="form-control" name="date" id="date" style=" min-width: 140px;"
                       value="{{ date or '' }}">
               </div>
-              <div class="col-sm-3 ps-0">
-                <span class="text-muted small">※日付 Enter で、区分1～4に値が入ります</span>
+              <div class="col-sm-3 ps-3">
+                <span class="text-muted small" style="min-width: 400px; display: block;">※日付 Enter で、区分1～4に値が入ります</span>
               </div>
             </div>
 
             <div class="row mb-3">
-                <label class="col-sm-1 col-form-label">区分1</label>
+                <label class="col-sm-1 col-form-label" style="min-width: 80px;">区分1</label>
                 <div class="col-sm-1">
-                    <input type="text" class="form-control text-end" name="kubun1" id="kubun1" value="{{ kubun1 or '' }}">
+                    <input type="text" class="form-control text-end" name="kubun1" id="kubun1" style="min-width: 60px;" value="{{ kubun1 or '' }}">
                 </div>
-                <div class="col-sm-4 d-flex align-items-center">
-                    <span id="kubun1_desc" class="text-muted small"></span>
+                <div class="col-sm-4 d-flex align-items-center ps-3">
+                    <span id="kubun1_desc" class="text-muted small" style="min-width: 400px;"></span>
                 </div>
             </div>
 
             <div class="row mb-3">
-                <label class="col-sm-1 col-form-label">区分2</label>
+                <label class="col-sm-1 col-form-label" style=" min-width: 80px;">区分2</label>
                 <div class="col-sm-1">
-                    <input type="text" class="form-control text-end" name="kubun2" id="kubun2" value="{{ kubun2 or '' }}">
+                    <input type="text" class="form-control text-end" name="kubun2" id="kubun2" style="min-width: 60px;" value="{{ kubun2 or '' }}">
                 </div>
-                <div class="col-sm-4 d-flex align-items-center">
-                    <span id="kubun2_desc" class="text-muted small"></span>
+                <div class="col-sm-4 d-flex align-items-center ps-3">
+                    <span id="kubun2_desc" class="text-muted small" style="min-width: 400px;"></span>
                 </div>
             </div>
 
             <div class="row mb-3">
-                <label class="col-sm-1 col-form-label">区分3</label>
+                <label class="col-sm-1 col-form-label" style=" min-width: 80px;">区分3</label>
                 <div class="col-sm-1">
-                    <input type="text" class="form-control text-end" name="kubun3" id="kubun3" value="{{ kubun3 or '' }}">
+                    <input type="text" class="form-control text-end" name="kubun3" id="kubun3" style="min-width: 60px;" value="{{ kubun3 or '' }}">
                 </div>
-                <div class="col-sm-4 d-flex align-items-center">
-                    <span id="kubun3_desc" class="text-muted small"></span>
+                <div class="col-sm-4 d-flex align-items-center ps-3">
+                    <span id="kubun3_desc" class="text-muted small" style="min-width: 400px;"></span>
                 </div>
             </div>
 
             <div class="row mb-3">
-                <label class="col-sm-1 col-form-label">区分4</label>
+                <label class="col-sm-1 col-form-label" style=" min-width: 80px;">区分4</label>
                 <div class="col-sm-1">
-                    <input type="text" class="form-control text-end" name="kubun4" id="kubun4" value="{{ kubun4 or '' }}">
+                    <input type="text" class="form-control text-end" name="kubun4" id="kubun4" style="min-width: 60px;" value="{{ kubun4 or '' }}">
                 </div>
-                <div class="col-sm-4 d-flex align-items-center">
-                    <span id="kubun4_desc" class="text-muted small"></span>
+                <div class="col-sm-4 d-flex align-items-center ps-3">
+                    <span id="kubun4_desc" class="text-muted small" style="min-width: 400px;"></span>
                 </div>
             </div>
 
