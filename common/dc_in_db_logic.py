@@ -1,13 +1,25 @@
 import datetime
 import unicodedata
-from .db_connection import get_connection
 from itertools import groupby
+
+# ★相対インポート (commonフォルダのdb_connectionを使う)
+from .db_connection import get_connection
+
 TARGET_DB = 'master'
 
 CENTER_NAME_MAP = {
     'D03': '守谷C',
     'D04': '狭山日高C',
 }
+
+# ==========================================
+# 設定定義: 業務時間設定
+# ==========================================
+MODE_CONFIG = {
+    'normal':  {'start': '08:00', 'end': '20:00'},
+    'morning': {'start': '05:00', 'end': '10:50'}
+}
+
 # ==========================================
 # ヘルパー関数: 文字列のお掃除
 # ==========================================
@@ -18,15 +30,54 @@ def clean_str(text):
     return text.replace('"', '').strip()
 
 # ==========================================
+# ヘルパー関数: DB時刻取得
+# ==========================================
+def get_db_server_time(target_db='master'):
+    """
+    master DBの時刻を取得。失敗したらAPサーバー時刻を返す。
+    """
+    conn = None
+    try:
+        conn = get_connection(target_db)
+        cursor = conn.cursor()
+        cursor.execute("SELECT CURRENT_TIMESTAMP")
+        row = cursor.fetchone()
+        if row:
+            return row[0]
+    except Exception as e:
+        print(f"DB Time Error: {e}")
+    finally:
+        if conn: conn.close()
+    
+    return datetime.datetime.now()
+
+# ==========================================
 # 共通関数: 列名を強制的に小文字にする
 # ==========================================
-def _row_to_dict(cursor, row):
-    # col[0] は列名。これを .lower() してキーにする
-    return {col[0].lower(): val for col, val in zip(cursor.description, row)}
-
 def _get_center_name(code):
     return CENTER_NAME_MAP.get(code.strip(), code)
 
+# ==========================================
+# 共通チェック: 時間判定
+# ==========================================
+def check_business_time(mode='normal'):
+    """
+    現在時刻が業務時間内かチェックする。
+    NGならエラーメッセージを返す。OKならNone。
+    """
+    config = MODE_CONFIG.get(mode)
+    if not config:
+        return None 
+
+    # DBサーバー時刻を取得
+    now = get_db_server_time('master')
+    current_time_str = now.strftime('%H:%M')
+
+    # 時間判定
+    if not (config['start'] <= current_time_str <= config['end']):
+        return f"受付時間外です。<br>現在: {current_time_str} (受付: {config['start']} ～ {config['end']})"
+
+    return None
 
 # ==========================================
 # 1. 一覧・検索機能
@@ -154,16 +205,11 @@ def get_filter_options():
     try:
         options = {'import_ids': [], 'centers': [], 'depts': [], 'vendors': []}
         
-        # --- 取込IDとセンターの取得（変更なし） ---
         cursor.execute("SELECT cucd FROM DBA.dcnyu03 UNION SELECT cucd FROM DBA.dcnyu04")
         raw_centers = [r[0] for r in cursor.fetchall() if r[0]]
         options['centers'] = sorted(list(set([_get_center_name(c) for c in raw_centers])))
         
-        cursor.execute("SELECT DISTINCT deno FROM (SELECT deno FROM DBA.dcnyu03 UNION SELECT deno FROM DBA.dcnyu04) AS T ORDER BY deno DESC")
-        # (取込IDのロジックは元のまま維持してください。必要ならここに追加)
-        
-        # --- 部門 (コードと名称を取得) ---
-        # T.bucd (コード) も取得します
+        # 部門
         sql_dept = """
             SELECT DISTINCT T.bucd, N.nmkj 
             FROM (SELECT bucd FROM DBA.dcnyu03 UNION SELECT bucd FROM DBA.dcnyu04) AS T 
@@ -171,20 +217,15 @@ def get_filter_options():
             ORDER BY T.bucd
         """
         cursor.execute(sql_dept)
-        # 辞書リストの形にします: {'code': '10', 'name': '食品部', 'label': '10 食品部'}
         dept_list = []
         for r in cursor.fetchall():
             code = r[0].strip() if r[0] else ''
             name = r[1].strip() if r[1] else '(名称不明)'
             if code:
-                dept_list.append({
-                    'code': code,
-                    'name': name,
-                    'label': f"{code} {name}"
-                })
+                dept_list.append({'code': code, 'name': name, 'label': f"{code} {name}"})
         options['depts'] = dept_list
         
-        # --- 取引先 (コードと名称を取得) ---
+        # 取引先
         sql_vendor = """
             SELECT DISTINCT T.vecd, V.nmkj 
             FROM (SELECT vecd FROM DBA.dcnyu03 UNION SELECT vecd FROM DBA.dcnyu04) AS T 
@@ -197,11 +238,7 @@ def get_filter_options():
             code = r[0].strip() if r[0] else ''
             name = r[1].strip() if r[1] else '(名称不明)'
             if code:
-                vendor_list.append({
-                    'code': code,
-                    'name': name,
-                    'label': f"{code} {name}"
-                })
+                vendor_list.append({'code': code, 'name': name, 'label': f"{code} {name}"})
         options['vendors'] = vendor_list
 
         return options
@@ -210,7 +247,7 @@ def get_filter_options():
         conn.close()
 
 # ==========================================
-# 2. 詳細画面用 (修正版)
+# 2. 詳細画面用
 # ==========================================
 def get_voucher_detail(voucher_id):
     conn = get_connection(TARGET_DB)
@@ -252,23 +289,17 @@ def get_voucher_detail(voucher_id):
         """
         cursor.execute(sql, [voucher_id, voucher_id])
         
-        # ★修正ポイント1: 列名リストをこの瞬間に確定させてリスト化しておく
-        # cursor.description は次のexecuteで消えてしまうため
         cols = [col[0].lower() for col in cursor.description]
-        
         rows = cursor.fetchall()
         
         if not rows: return None
         
-        # ★修正ポイント2: 最初の行の辞書化も、確保した cols を使う
         first_row = dict(zip(cols, rows[0]))
         
-        # --- ここで別のSQLを実行しても大丈夫になります ---
         sql_neb = "SELECT DISTINCT deno FROM DBA.dcneb WHERE deno11 = ? AND trdk = '13'"
         cursor.execute(sql_neb, [voucher_id])
         neb_row = cursor.fetchone()
         discount_id_val = neb_row[0].strip() if neb_row else ''
-        # -----------------------------------------------
 
         d_date = first_row.get('delivery_date')
         if isinstance(d_date, (datetime.date, datetime.datetime)): 
@@ -294,10 +325,8 @@ def get_voucher_detail(voucher_id):
         total_cost = 0
         
         for row in rows:
-            # ★修正ポイント3: _row_to_dict ではなく、確保しておいた cols と zip する
             d = dict(zip(cols, row))
             
-            # --- 以下は変更なし ---
             qty = int(d.get('order_qty') or 0)
             cost_unit = d.get('cost_price') or 0
             discount = d.get('total_disc') or 0
@@ -553,6 +582,12 @@ def insert_voucher_data(data_list, user_id):
     一時保存されていたリストを受け取り、グルーピングしてDB登録を行う。
     dcnyu03/04 (仕入) と dcneb (値引) に分割してINSERTする。
     """
+    
+    # 1. 時間チェック (登録ボタンを押した瞬間にもチェック)
+    time_error = check_business_time('normal')
+    if time_error:
+        raise Exception(time_error)
+
     conn = get_connection('master')
     conn.autocommit = False # トランザクション開始
     cursor = conn.cursor()
@@ -560,8 +595,7 @@ def insert_voucher_data(data_list, user_id):
     total_vouchers = 0
     
     try:
-        # 1. 伝票単位にグルーピング (センター > 納品日 > ベンダー > 部門)
-        # ソート
+        # 2. 伝票単位にグルーピング (センター > 納品日 > ベンダー > 部門)
         key_func = lambda x: (x['center_name'], x['delivery_date'], x['vendor_code'], x['dept_code'])
         data_list.sort(key=key_func)
 
@@ -569,7 +603,6 @@ def insert_voucher_data(data_list, user_id):
             items = list(items) # 明細行リスト
             
             # --- A. 仕入伝票番号の採番 (Sequence A) ---
-            # ※ここで採番ロジックを呼ぶ
             main_voucher_id = _get_next_number(cursor, 'purchase') 
             
             # 挿入先テーブルの決定
@@ -579,12 +612,8 @@ def insert_voucher_data(data_list, user_id):
             # --- B. 仕入伝票(親)のINSERT ---
             line_no = 1
             for row in items:
-                # detail_rowの構成:
-                # [0]商品CD, [1]JAN, [2]品名, [3]規格, [4]メーカー
-                # [5]バラ数, [6]ケース数, [7]本部費, [8]物流費, [9]原単価, [10]原価計, [11]値引計
                 d = row['detail_row']
                 
-                # SQL (カラム名は実際のスキーマに合わせて調整してください)
                 sql_insert_main = f"""
                     INSERT INTO {target_table} (
                         deno, no, cucd, bucd, vecd, dldt, 
@@ -593,10 +622,7 @@ def insert_voucher_data(data_list, user_id):
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 
-                # パラメータ作成
-                # dltn(原単価), prtn(値引額)
-                # ※ここでの値引(prtn)は「行ごとの値引額」を保持する場合
-                val_discount = float(d[11].replace(',','')) # 文字列書式を解除
+                val_discount = float(d[11].replace(',',''))
                 
                 params_main = [
                     main_voucher_id,    # deno
@@ -606,13 +632,13 @@ def insert_voucher_data(data_list, user_id):
                     v_code,             # vecd
                     d_date,             # dldt
                     d[0],               # cocd (Item Code)
-                    d[6],               # odsu (ケース数を入れるかバラ数を入れるかは運用による。一旦ケース数)
+                    d[6],               # odsu (ケース数)
                     float(d[9].replace(',','')), # dltn (原単価)
                     val_discount,       # prtn (値引金額)
                     d[7],               # md (本部費)
                     d[8],               # dc (物流費)
-                    row.get('pass_flag', '0'), # thrflg (通過) ※row自体に持たせておく必要あり(後述)
-                    user_id,            # sign
+                    row.get('pass_flag', '0'), # thrflg (通過)
+                    user_id,            # sign (ADユーザー名)
                     datetime.datetime.now().strftime('%Y/%m/%d'), # rgdt
                     datetime.datetime.now().strftime('%H:%M:%S')  # upti
                 ]
@@ -623,11 +649,9 @@ def insert_voucher_data(data_list, user_id):
             total_vouchers += 1
 
             # --- C. 値引伝票の処理 (値引がある場合のみ) ---
-            # この伝票内の値引合計を計算
             total_discount_in_voucher = sum(float(x['detail_row'][11].replace(',','')) for x in items)
 
             if total_discount_in_voucher > 0:
-                # 値引伝票番号の採番 (Sequence B)
                 discount_voucher_id = _get_next_number(cursor, 'discount')
                 
                 line_no_neb = 1
@@ -636,8 +660,6 @@ def insert_voucher_data(data_list, user_id):
                     val_disc = float(d[11].replace(',',''))
                     
                     if val_disc > 0:
-                        # 値引テーブル(dcneb)へのINSERT
-                        # deno: 自分(値引)の番号, deno11: 親(仕入)の番号
                         sql_insert_neb = """
                             INSERT INTO DBA.dcneb (
                                 deno, deno11, no, cucd, bucd, vecd, dldt,
@@ -645,27 +667,27 @@ def insert_voucher_data(data_list, user_id):
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """
                         params_neb = [
-                            discount_voucher_id, # deno (New)
-                            main_voucher_id,     # deno11 (Link to Parent)
+                            discount_voucher_id, # deno
+                            main_voucher_id,     # deno11
                             line_no_neb,         # no
                             center_code_db,
                             dept_code,
                             v_code,
                             d_date,
                             d[0],                # cocd
-                            d[6],                # odsu (数量)
-                            float(d[9].replace(',','')), # nebtan (元の単価?)
-                            val_disc,            # nebngk (値引額)
+                            d[6],                # odsu
+                            float(d[9].replace(',','')), # nebtan
+                            val_disc,            # nebngk
                             user_id
                         ]
                         cursor.execute(sql_insert_neb, params_neb)
                         line_no_neb += 1
 
-        conn.commit() # 全て成功したら確定
+        conn.commit()
         return f"登録完了: {total_vouchers}件の伝票を作成しました。"
 
     except Exception as e:
-        conn.rollback() # エラーなら全部取り消し
+        conn.rollback()
         raise e
     finally:
         cursor.close()
@@ -677,24 +699,9 @@ def insert_voucher_data(data_list, user_id):
 def _get_next_number(cursor, num_type):
     """
     伝票番号を採番する。
-    num_type: 'purchase' (仕入) or 'discount' (値引)
     """
-    # ★パターン1: 採番テーブルがある場合 (推奨)
-    # table_key = 'NYU' if num_type == 'purchase' else 'NEB'
-    # cursor.execute("UPDATE DBA.saiban_tbl SET cur_no = cur_no + 1 WHERE key_col = ?", [table_key])
-    # cursor.execute("SELECT cur_no FROM DBA.saiban_tbl WHERE key_col = ?", [table_key])
-    # return cursor.fetchone()[0]
-
-    # ★パターン2: 簡易的に現在時刻などでユニークIDを作る場合 (とりあえず動かすならこれ)
-    # ただし、レガシーDBのカラム定義(数字8桁など)に合わせる必要があります。
-    # ここでは仮に「数字8桁」をランダム生成っぽく作る例ですが、
-    # **本来は既存システムの採番ルールに従うSQLをここに書いてください**
-    
+    # ★本番環境では必ず採番テーブルを使用するロジックに変更してください
     import random
-    prefix = "1" if num_type == 'purchase' else "9" # 仕入は1始まり、値引は9始まり、など
-    # 実際はDBからMAXを取るのが一番衝突しないが遅い
-    # cursor.execute("SELECT MAX(deno) FROM DBA.dcnyu03") ...
-    
-    # ダミー実装: ミリ秒を使って衝突回避
+    prefix = "1" if num_type == 'purchase' else "9" 
     now_str = datetime.datetime.now().strftime('%d%H%M%S')
-    return f"{prefix}{now_str}" # 例: 125143001
+    return f"{prefix}{now_str}"

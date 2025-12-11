@@ -7,6 +7,7 @@ from itertools import groupby
 
 from . import dc_in_bp as bp
 from common import dc_in_db_logic as db_logic
+from common.auth_util import get_remote_user
 
 TEMP_DATA_STORE = {}
 
@@ -20,9 +21,9 @@ def home():
 
 @bp.route('/confirm', methods=['POST'])
 def show_confirmation():
-    # 1. ユーザー情報の取得 (ダミー)
-    raw_user = "JASON\\fujiname"
-    current_user_id = raw_user.split('\\')[1] if '\\' in raw_user else raw_user
+# 1. ユーザー情報の取得 (本実装)
+    # common.auth_util を使って取得
+    current_user_id = get_remote_user(request)
 
     # 2. ファイルチェック
     if 'file' not in request.files:
