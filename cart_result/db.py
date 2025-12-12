@@ -221,3 +221,29 @@ def get_category_titles():
 
     return title_map
 
+def get_cucd_info_map():
+    """
+    CucdInfo から floorSpace, scmCucd, vehicle を取得し、
+    cucd をキーとする辞書で返す。
+    """
+    with get_connection("SQLS08-14") as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT cucd, floorSpace, scmCucd, vehicle
+            FROM dbo.CucdInfo
+        """)
+        rows = cur.fetchall()
+
+    info = {}
+    for r in rows:
+        cucd = str(r.cucd).strip()
+
+        # scmCucd が NULL の場合は空欄
+        scm = "" if r.scmCucd is None else str(r.scmCucd).strip()
+
+        info[cucd] = {
+            "floorSpace": r.floorSpace,
+            "scmCucd": scm,
+            "vehicle": "" if r.vehicle is None else str(r.vehicle).strip(),
+        }
+    return info

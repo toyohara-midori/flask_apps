@@ -39,12 +39,16 @@ def build_base_layout(ws, year, shop_master):
     ・曜日（5行・日曜赤）
     ・店舗CD・店舗名（6行～）
     """
+    from .db import get_cucd_info_map
+    from common.cucd_logic import get_cucd_name
+
+    cucd_info_map = get_cucd_info_map()
 
     # --- カレンダー情報取得 ---
     days = get_week_calendar(year)
 
     # --- 列開始位置 ---
-    col_start = 4
+    col_start = 7   # G列から日付
     col_idx = col_start
     prev_weekno = None
     week_start_col = col_start
@@ -85,11 +89,6 @@ def build_base_layout(ws, year, shop_master):
     for c in range(col_start, col_idx):
         ws.column_dimensions[get_column_letter(c)].width = 6
 
-    # --- 見出し行 ---
-    ws["B5"] = "店舗CD"
-    ws["C5"] = "店舗名"
-    ws.freeze_panes = "D6"
-
     # --- 店舗CD・店舗名の枠だけ作る（値はのちほど fill_values で入れる） ---
     row = 6
     for cucd, name in shop_master:
@@ -97,6 +96,21 @@ def build_base_layout(ws, year, shop_master):
             continue
         ws.cell(row=row, column=2).value = cucd
         ws.cell(row=row, column=3).value = name
+
+        info = cucd_info_map.get(cucd, {})
+
+        fs = info.get("floorSpace")
+        ws.cell(row=row, column=4).value = round(float(fs), 1) if fs is not None else ""
+
+        scm = info.get("scmCucd", "")
+        center_name = ""
+        if scm:
+            nm = get_cucd_name(scm) or ""
+            center_name = nm.replace("ＤＣ", "").replace("DC", "")
+        ws.cell(row=row, column=5).value = center_name
+
+        ws.cell(row=row, column=6).value = info.get("vehicle", "")
+
         row += 1
 
     # --- 共通フォーマット ---
@@ -106,6 +120,9 @@ def build_base_layout(ws, year, shop_master):
     apply_font_style(ws)
     apply_sunday_red(ws, col_start, col_idx - 1, days)
 
+    # セル固定
+    ws.freeze_panes = "G6"
+
     return days, col_start, col_idx
 
 
@@ -114,9 +131,24 @@ def build_base_layout(ws, year, shop_master):
 # ============================================================
 def duplicate_sheet(wb, base_ws, title):
     """区分1レイアウトシートをコピーして新規シートにする"""
+
+    # まずコピー
     new_ws = wb.copy_worksheet(base_ws)
     new_ws.title = title
-    new_ws.freeze_panes = "D6"
+
+    # ★ 列幅をコピーする ★
+    for col_letter, col_dim in base_ws.column_dimensions.items():
+        if col_dim.width is not None:
+            new_ws.column_dimensions[col_letter].width = col_dim.width
+
+    # ★ 行の高さもコピー（必要なら）
+    for row_idx, row_dim in base_ws.row_dimensions.items():
+        if row_dim.height is not None:
+            new_ws.row_dimensions[row_idx].height = row_dim.height
+
+    # 再設定（freeze_panes はコピーされないので必要）
+    new_ws.freeze_panes = "G6"
+
     return new_ws
 
 
@@ -132,7 +164,7 @@ def fill_values(ws, days, shop_master, data_dict, kbn_no):
       4 → cat4
       "total" → cat1+cat2+cat3+cat4
     """
-    col_start = 4
+    col_start = 7
     row_idx = 6
 
     for cucd, name in shop_master:
@@ -485,7 +517,7 @@ def export_excel():
 
     # ---- 区分1レイアウト作成 ----
     days, col_start, col_end = build_base_layout(base_ws, year, shop_master)
-
+    
     # 2行目B列タイトル
     base_ws["B2"] = title_map[1]
     base_ws["B2"].font = Font(name="Meiryo UI", size=14, bold=True)
@@ -583,7 +615,11 @@ def build_base_layout_period(ws, start_date, end_date, shop_master):
     ・店舗CD・店舗名
     """
     from common.db_connection import get_connection
-    
+    from .db import get_cucd_info_map
+    from common.cucd_logic import get_cucd_name
+
+    cucd_info_map = get_cucd_info_map()
+
     # --------------------------
     # ① 期間内の日付リスト作成
     # --------------------------
@@ -608,7 +644,7 @@ def build_base_layout_period(ws, start_date, end_date, shop_master):
     # --------------------------
     # ② カレンダー描画（年度版と同じ方式）
     # --------------------------
-    col_start = 4
+    col_start = 7   # G列から日付
     col_idx = col_start
     prev_weekno = None
     week_start_col = col_start
@@ -648,11 +684,6 @@ def build_base_layout_period(ws, start_date, end_date, shop_master):
     for c in range(col_start, col_idx):
         ws.column_dimensions[get_column_letter(c)].width = 6
 
-    # 見出し
-    ws["B5"] = "店舗CD"
-    ws["C5"] = "店舗名"
-    ws.freeze_panes = "D6"
-
     # 店舗一覧
     row = 6
     for cucd, name in shop_master:
@@ -660,6 +691,21 @@ def build_base_layout_period(ws, start_date, end_date, shop_master):
             continue
         ws.cell(row=row, column=2).value = cucd
         ws.cell(row=row, column=3).value = name
+
+        info = cucd_info_map.get(cucd, {})
+
+        fs = info.get("floorSpace")
+        ws.cell(row=row, column=4).value = round(float(fs), 1) if fs is not None else ""
+
+        scm = info.get("scmCucd", "")
+        center_name = ""
+        if scm:
+            nm = get_cucd_name(scm) or ""
+            center_name = nm.replace("ＤＣ", "").replace("DC", "")
+        ws.cell(row=row, column=5).value = center_name
+
+        ws.cell(row=row, column=6).value = info.get("vehicle", "")
+
         row += 1
 
     # 共通フォーマット適用
@@ -668,6 +714,9 @@ def build_base_layout_period(ws, start_date, end_date, shop_master):
     apply_header_color(ws, col_start, col_idx - 1)
     apply_font_style(ws)
     apply_sunday_red(ws, col_start, col_idx - 1, days)
+
+    # セル固定
+    ws.freeze_panes = "G6"
 
     return days, col_start, col_idx
 

@@ -8,12 +8,18 @@ from openpyxl.utils import get_column_letter
 def apply_common_format(ws, col_start, col_end):
     """セル結合・列幅・固定位置"""
 
-    # 列幅
+    # 列幅（固定列は触らない）
     ws.column_dimensions["A"].width = 2
     ws.column_dimensions["B"].width = 5
     ws.column_dimensions["C"].width = 22
+    ws.column_dimensions["D"].width = 10    # 売場面積列
+    ws.column_dimensions["E"].width = 12    # 配送センター列
+    ws.column_dimensions["F"].width = 10    # 納品車両列
+
+    # ★★★ 日付列（G列以降）だけ幅を設定する ★★★
     for c in range(col_start, col_end + 1):
-        ws.column_dimensions[get_column_letter(c)].width = 7
+        col_letter = get_column_letter(c)
+        ws.column_dimensions[col_letter].width = 7
 
     # B3〜B5
     ws.merge_cells("B3:B5")
@@ -25,12 +31,23 @@ def apply_common_format(ws, col_start, col_end):
     ws["C3"].value = "店舗名"
     ws["C3"].alignment = Alignment(horizontal="center", vertical="center")
 
+    # D3〜D5
+    ws.merge_cells("D3:D5")
+    ws["D3"].value = "売場面積\n(坪)"
+    ws["D3"].alignment = Alignment(horizontal="center", vertical="center")
+
+    # E3〜E5
+    ws.merge_cells("E3:E5")
+    ws["E3"].value = "配送センター"
+    ws["E3"].alignment = Alignment(horizontal="center", vertical="center")
+
+    # F3〜F5
+    ws.merge_cells("F3:F5")
+    ws["F3"].value = "納品車両"
+    ws["F3"].alignment = Alignment(horizontal="center", vertical="center")
+
     # 2行目の高さを設定
     ws.row_dimensions[2].height = 19.5
-
-    # ★ セル固定
-    #    (でもこれはコピー後のシートには適用されないので、コピー後に再設定が必要)
-    ws.freeze_panes = "D6"
 
 # -----------------------------------------
 # 罫線設定
