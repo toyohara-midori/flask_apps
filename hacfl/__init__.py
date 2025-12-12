@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for
+from flask import Blueprint, render_template, request, redirect, url_for, session
 from common.db_check_util import is_db_available, MAINTENANCE_HTML
 from common.auth_util import get_remote_user
 from common.ad_tool import is_user_in_group

@@ -1,76 +1,107 @@
-from ldap3 import Server, Connection, ALL, NTLM
+import subprocess
 
-# ==========================================
-AD_SERVER_ADDRESS = 'ldap://10.10.254.5'  # ADサーバーのIPまたはホスト名
-AD_SEARCH_BASE = 'dc=jason,dc=intra'   # 検索範囲（ドメイン名など）
-
-# ADを検索するための「読み取り専用ユーザー」
-# （ADにアクセスできるなら、あなたのID/PASSでも実験はできます）
-AD_BIND_USER = 'JASON\\fujiname2r'       
-AD_BIND_PASSWORD = 'fujinametest'
-# ==========================================
-
-def is_user_in_group(target_full_name, target_group_name):
+def check_permission_via_command(target_full_name, allowed_group_list):
     """
-    ユーザーが指定されたADグループに入っているかチェックする関数
+    IIS環境対応版: net user コマンドを使用して
+    指定されたグループリストのいずれかに所属しているかチェックする関数
+    
     Args:
-        target_full_name (str): "DOMAIN\\User" 形式のユーザー名
-        target_group_name (str): チェックしたいグループ名（例: "SalesTeam"）
+        target_full_name (str): "DOMAIN\\User" または "User" 形式のユーザー名
+        allowed_group_list (list): 許可するグループ名のリスト (例: ['Domain Admins', 'G-商品部'])
+        
     Returns:
-        bool: 入っていれば True, 入っていなければ False
+        bool: リスト内のグループのいずれかに所属していれば True
     """
 
     # --- 【重要】開発環境用の抜け道 ---
     # デバッグ用のダミーユーザーが来たら、無条件でOKを返す
-    if 'Debug_User' in target_full_name:
-        print(f"★開発モード: {target_full_name} なので {target_group_name} へのアクセスを許可しました")
+    # (main.py の mock_login_info_for_debug 等で設定した値)
+    if 'Debug_User' in str(target_full_name):
         return True
     # -------------------------------
 
     # 1. ユーザー名からドメイン部分 "DOMAIN\" をカットする
-    #    (AD検索は "User" だけで行うため)
-    if '\\' in target_full_name:
+    #    (net user コマンドはユーザー名単体で実行するため)
+    if target_full_name and '\\' in target_full_name:
         username = target_full_name.split('\\')[1]
     else:
         username = target_full_name
 
+    if not username:
+        return False
+
     try:
-        # 2. ADサーバーに接続
-        server = Server(AD_SERVER_ADDRESS, get_info=ALL)
-        conn = Connection(server, user=AD_BIND_USER, password=AD_BIND_PASSWORD, authentication=NTLM, auto_bind=True)
-
-        # 3. そのユーザーを検索して、所属グループ(memberOf)を取得
-        #    sAMAccountName は WindowsのログインIDのこと
-        conn.search(search_base=AD_SEARCH_BASE,
-                    search_filter=f'(sAMAccountName={username})',
-                    attributes=['memberOf'])
-
-        # ユーザー自体が見つからなかった場合
-        if not conn.entries:
-            print(f"User {username} not found in AD.")
-            return False
-
-        # 4. 所属グループリストを取得
-        #    memberOf は ['CN=Sales,OU=Users...', 'CN=Admins...'] というリストで返ってくる
-        user_groups_dn = conn.entries[0].memberOf.value
+        # 2. net user コマンドを実行してADに問い合わせる
+        #    コマンド: net user <ユーザー名> /domain
+        #    ※IISの実行ユーザー(AppPool)でも、AD情報の読み取り権限は通常持っています
+        cmd = f"net user {username} /domain"
         
-        # グループリストが空の場合（何も所属していない）の対策
-        if not user_groups_dn:
-            return False
+        # 日本語Windows環境での文字化けを防ぐため encoding='cp932' (Shift_JIS) を指定
+        output = subprocess.check_output(cmd, shell=True, encoding='cp932')
 
-        # 5. 指定されたグループ名が含まれているかチェック
-        #    "CN=SalesTeam," のように、CN= と , で挟んで完全一致を探すのが安全
-        target_cn = f"CN={target_group_name},"
-        
-        for group_dn in user_groups_dn:
-            # 大文字小文字を区別しないように両方小文字にしてチェック
-            if target_cn.lower() in str(group_dn).lower():
+        # 3. 出力結果の中に、許可リストのグループ名が含まれているかチェック
+        for group in allowed_group_list:
+            # 大文字小文字の揺れを吸収してチェックするのが安全ですが、
+            # net user の出力と厳密に合わせるならそのまま in で判定
+            if group in output:
                 return True
-        
-        # 最後まで見つからなかった
+                
+        # ループを抜けてもTrueにならなかった＝どのグループにも入っていない
         return False
 
-    except Exception as e:
-        # サーバーにつながらない、パスワード間違いなどのエラー
-        print(f"AD Connection Error: {e}")
+    except subprocess.CalledProcessError:
+        # ユーザーが存在しない、またはADに接続できない場合
+        # (net user コマンドがエラーコードを返した場合)
         return False
+        
+    except Exception as e:
+        # その他の予期せぬエラー
+        print(f"[AD Tool Error] {e}")
+        return False
+
+def create_access_denied_html(target_username):
+    """
+    権限エラー画面のHTMLとステータスコードを返すヘルパー関数
+    """
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="ja">
+    <head>
+        <meta charset="UTF-8">
+        <title>Access Denied</title>
+        <style>
+            body {{ font-family: sans-serif; padding: 40px; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; border: 1px solid #ccc; padding: 20px; border-radius: 8px; }}
+            h2 {{ color: #d9534f; border-bottom: 2px solid #d9534f; padding-bottom: 10px; }}
+            .user-info {{ background-color: #f9f9f9; padding: 10px; border-left: 4px solid #5bc0de; margin: 20px 0; }}
+            .note {{ font-size: 0.9em; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>アクセス権限がありません</h2>
+            <p>申し訳ありませんが、このページを表示する許可がありません。</p>
+            
+            <div class="user-info">
+                現在のログインユーザー: <strong>{target_username}</strong>
+            </div>
+            
+            <p class="note">
+               ※正しいアカウントにも関わらずこの画面が表示される場合は、
+               システム管理者へ「<strong>{target_username}</strong> の権限確認」をご依頼ください。
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+    # HTML本文と、ステータスコード403をセットで返す
+    return html_content, 403
+
+def is_user_in_group(target_full_name, target_group_name):
+    """
+    旧仕様の関数。
+    単一のグループ名をチェックしたい場合用。
+    内部で新しい check_permission_via_command を呼び出す。
+    """
+    # 新しい関数はリストを受け取るので、リストに包んで渡す
+    return check_permission_via_command(target_full_name, [target_group_name])
