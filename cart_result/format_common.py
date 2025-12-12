@@ -34,7 +34,8 @@ def apply_common_format(ws, col_start, col_end):
     # D3〜D5
     ws.merge_cells("D3:D5")
     ws["D3"].value = "売場面積\n(坪)"
-    ws["D3"].alignment = Alignment(horizontal="center", vertical="center")
+    ws["D3"].alignment = Alignment(horizontal="center", vertical="center",
+                            wrap_text=True)
 
     # E3〜E5
     ws.merge_cells("E3:E5")
