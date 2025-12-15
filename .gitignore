@@ -23,3 +23,12 @@ env/
 
 # IIS設定ファイル
 Web.config
+
+# ライブラリインストール用ファイル
+requirements.txt
+
+# ログファイル
+*.log
+
+# バックアップファイル
+*BK*

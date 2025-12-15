@@ -1,6 +1,7 @@
 # =============================
 # IPアドレス　→　店舗番号変換関数
 # =============================
+import os
 
 def extract_store_from_ip(ip: str) -> str | None:
     """
@@ -10,6 +11,15 @@ def extract_store_from_ip(ip: str) -> str | None:
     ・aaが75〜98 → 'B' + aa
     ・それ以外 → ゼロ埋め3桁
     """
+    # ★ LOCAL環境なら強制的に "023" を返す
+    # ホントはweb.configでやりたかったんだけど、豊原のWaitress & NSSM 環境では読み込めないの
+    if (
+        ip.startswith("127.") or
+        ip == "localhost" or
+        ip == "::1"
+    ):
+        return "023"
+
     try:
         parts = ip.split(".")
         if len(parts) != 4:
