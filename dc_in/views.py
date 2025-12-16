@@ -54,22 +54,17 @@ def show_confirmation():
         return render_template('dc_in/index.html', error_list=error_msgs)
 
     # ==========================================
-    # ★ 正常時の処理 (ここが抜けていた可能性があります)
+    # ★ 正常時の処理
     # ==========================================
     
-    # A. 一時保存 (Batch ID生成)
-    batch_id = str(uuid.uuid4())
-    TEMP_DATA_STORE[batch_id] = {
-        'data': enriched_list,
-        'user': current_user_id
-    }
-
-    # B. 画面表示用にグルーピング (センター > 納品日 > ベンダー > 部門)
-    # 並び替え
-    key_func = lambda x: (x['center_name'], x['delivery_date'], x['vendor_code'], x['dept_code'])
-    enriched_list.sort(key=key_func)
-
-    center_groups = {} # ★ここで定義します
+    # A. バッチID生成 (UUID + ユーザー名)
+    batch_id = f"{uuid.uuid4()}-{current_user_id}"
+    
+    # B. ワークテーブル (DC_IN_CSV) へ保存
+    try:
+        db_logic.save_to_work_table(batch_id, current_user_id, enriched_list)
+    except Exception as e:
+        return f"データ一時保存エラー: {e}", 500
 
     # センターで大分類
     for center, items_in_center in groupby(enriched_list, key=lambda x: x['center_name']):
@@ -79,6 +74,7 @@ def show_confirmation():
         
         center_items_list = list(items_in_center)
         center_items_list.sort(key=sub_key)
+        center_groups = {}
 
         for (d_date, v_code, dept_code), items in groupby(center_items_list, key=sub_key):
             items = list(items)
@@ -115,19 +111,45 @@ def show_confirmation():
             'other': other_count
         })
 
-    # D. 確認画面の表示
+    # D. 確認画面へ (import_id に batch_id を渡す)
     return render_template(
         'dc_in/confirm.html', 
         center_groups=center_groups, 
         global_summary=global_summary,
-        import_id=batch_id
+        import_id=batch_id 
     )
 
 @bp.route('/complete_insertion', methods=['POST'])
 def complete_insertion():
-    now = datetime.datetime.now()
-    new_import_id = f"{now.strftime('%Y%m%d-%H%M')}-demo"
-    return render_template('dc_in/complete.html', new_import_id=new_import_id)
+    # 画面から batch_id を受け取る
+    import_id = request.form.get('import_id')
+    
+    if not import_id:
+        return "不正なリクエストです(ID不足)", 400
+
+    try:
+        # 1. ワークテーブルからデータを再取得
+        data_list = db_logic.get_data_from_work_table(import_id)
+        
+        if not data_list:
+            return "セッション有効期限切れ、またはデータが見つかりません。最初からやり直してください。", 400
+
+        # 2. 本番テーブル(dcnyu03/04等)へ登録
+        # ユーザーIDはデータに含まれているのでそれを使う
+        user_id = data_list[0]['user_id']
+        result_msg = db_logic.insert_voucher_data(data_list, user_id)
+        
+        # 3. 完了画面用の新しいID生成 (これは画面表示用なので適当でOK)
+        now = datetime.datetime.now()
+        display_import_id = f"{now.strftime('%Y%m%d-%H%M')}-{user_id}"
+
+        # 4. ワークテーブルのお掃除
+        db_logic.delete_work_table(import_id)
+
+        return render_template('dc_in/complete.html', new_import_id=display_import_id)
+
+    except Exception as e:
+        return f"登録処理中にエラーが発生しました: {e}", 500
 
 @bp.route('/voucher_list', methods=['GET', 'POST'])
 def voucher_list():

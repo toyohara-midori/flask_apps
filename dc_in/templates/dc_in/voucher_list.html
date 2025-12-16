@@ -378,13 +378,16 @@
         <input type="hidden" name="order" value="{{ current_filters.order }}">
 
         <div class="filter-group">
-            <label style="color: #007bff;">📂 取込ID</label>
-            <select name="import_id" class="id-select" onchange="this.form.submit()">
+            <label style="color: #007bff;">📂 バッチID (履歴)</label>
+            <select name="batch_id" class="id-select" onchange="this.form.submit()">
                 <option value="">全て表示</option>
-                {% for i_id in import_ids %}
-                <option value="{{ i_id }}" {% if current_filters.import_id==i_id %}selected{% endif %}>{{ i_id }}</option>
+                {% for b in batch_options %}
+                <option value="{{ b.val }}" {% if current_filters.batch_id= =b.val %}selected{% endif %}>
+                    {{ b.text }}
+                </option>
                 {% endfor %}
             </select>
+        </div>
         </div>
         <div class="filter-group">
             <label>納品日</label>
@@ -458,9 +461,11 @@
                 <tr>
                     <th class="check-col"><input type="checkbox" onclick="toggleAll(this)"></th>
 
-                    <th class="sortable" onclick="applySort('import_id')">
-                        取込ID
-                        {% if current_filters.sort == 'import_id' %}<span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>{% endif %}
+                    <th class="sortable" onclick="applySort('batch_id')">
+                        バッチID
+                        {% if current_filters.sort == 'batch_id' %}
+                        <span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>
+                        {% endif %}
                     </th>
 
                     <th class="sortable" onclick="applySort('voucher_id')">
@@ -514,7 +519,9 @@
                 <tr>
                     <td class="check-col"><input type="checkbox" name="v_ids" value="{{ info.voucher_id }}"></td>
 
-                    <td class="text-center" style="font-size:0.8em; color:#666;">{{ info.import_id }}</td>
+                    <td class="text-center" style="font-size:0.8em; color:#666;" title="{{ info.batch_id }}">
+                        {{ info.batch_id[:8] }}...
+                    </td>
 
                     <td class="text-center">
                         <a href="#" onclick="openDetailWindow('{{ url_for('dc_in.voucher_detail', v_id=info.voucher_id) }}'); return false;">
