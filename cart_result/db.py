@@ -223,14 +223,21 @@ def get_category_titles():
 
 def get_cucd_info_map():
     """
-    CucdInfo から floorSpace, scmCucd, vehicle を取得し、
+    CucdInfo + custype から
+    floorSpace, scmCucd(type), vehicle を取得し、
     cucd をキーとする辞書で返す。
     """
     with get_connection("SQLS08-14") as conn:
         cur = conn.cursor()
         cur.execute("""
-            SELECT cucd, floorSpace, scmCucd, vehicle
-            FROM dbo.CucdInfo
+            SELECT
+                ci.cucd,
+                ci.floorSpace,
+                ct.type AS scmCucd,
+                ci.vehicle
+            FROM dbo.CucdInfo ci
+            LEFT JOIN DBA.custype ct
+                ON ct.cucd = ci.cucd
         """)
         rows = cur.fetchall()
 
@@ -238,12 +245,14 @@ def get_cucd_info_map():
     for r in rows:
         cucd = str(r.cucd).strip()
 
-        # scmCucd が NULL の場合は空欄
+        # scmCucd(type) が NULL の場合は空欄
         scm = "" if r.scmCucd is None else str(r.scmCucd).strip()
 
         info[cucd] = {
             "floorSpace": r.floorSpace,
-            "scmCucd": scm,
+            "scmCucd": scm,   # ← '003' / '004'
             "vehicle": "" if r.vehicle is None else str(r.vehicle).strip(),
         }
+
     return info
+

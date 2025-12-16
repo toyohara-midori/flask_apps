@@ -103,10 +103,11 @@ def build_base_layout(ws, year, shop_master):
         ws.cell(row=row, column=4).value = round(float(fs), 1) if fs is not None else ""
 
         scm = info.get("scmCucd", "")
-        center_name = ""
-        if scm:
-            nm = get_cucd_name(scm) or ""
-            center_name = nm.replace("ＤＣ", "").replace("DC", "")
+        SCM_NAME_MAP = {
+            "003": "守谷",
+            "002": "狭山日高",
+        }
+        center_name = SCM_NAME_MAP.get(scm, "")
         ws.cell(row=row, column=5).value = center_name
 
         ws.cell(row=row, column=6).value = info.get("vehicle", "")
@@ -698,10 +699,11 @@ def build_base_layout_period(ws, start_date, end_date, shop_master):
         ws.cell(row=row, column=4).value = round(float(fs), 1) if fs is not None else ""
 
         scm = info.get("scmCucd", "")
-        center_name = ""
-        if scm:
-            nm = get_cucd_name(scm) or ""
-            center_name = nm.replace("ＤＣ", "").replace("DC", "")
+        SCM_NAME_MAP = {
+            "003": "守谷",
+            "002": "狭山日高",
+        }
+        center_name = SCM_NAME_MAP.get(scm, "")
         ws.cell(row=row, column=5).value = center_name
 
         ws.cell(row=row, column=6).value = info.get("vehicle", "")
