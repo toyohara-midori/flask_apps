@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, session, Response, jsonify
+from flask import render_template, request, redirect, url_for, session, Response, jsonify, flash
 from common.auth_util import get_remote_user
 from common.log_util import write_op_log
 
@@ -43,14 +43,19 @@ def index():
     msg = ""
     error = ""
     current_mode = None
+
+    current_user = get_remote_user(request)
     
     # 認証済みユーザーを取得 (common.auth_util)
     current_user = get_remote_user(request)
 
     # --- GET時の処理: セッション初期化 ---
     if request.method == 'GET':
+        # BatchIDは消してOK（CSVの途中経過はリセット）
         session.pop('hacfl_batch_id', None)
-        session.pop('hacfl_mode', None)
+
+        # ★追加: セッションに前回のモードが残っていればそれを使う
+        current_mode = session.get('hacfl_mode')
 
     # --- POST時の処理 ---
     if request.method == 'POST':
@@ -72,13 +77,18 @@ def index():
             success, message = insert_single_record(current_mode, form_data, user_id=current_user)
             
             if success:
-                msg = message
+                # ログ書き込み
                 write_op_log(
                     user_id=current_user,
                     module='hacfl',
                     action='SINGLE_INSERT',
                     msg=f"成功: {message}"
                 )
+                
+                # ★ここを変更！ (PRGパターン)
+                # msg = message  <-- これだと画面描画になっちゃうので削除
+                flash(message, 'success')  # メッセージを一時保存
+                return redirect(url_for('hacfl.index'))  # 自分自身へリダイレクト！
             else:
                 error = message
         
@@ -103,6 +113,7 @@ def index():
                     return redirect(url_for('hacfl.confirm'))
                 else:
                     error = message
+                    pass
 
     return render_template(
         'hacfl/index.html', 

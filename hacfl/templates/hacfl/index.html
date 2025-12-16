@@ -341,6 +341,16 @@
 
         // ページ読み込み時に実行 (これで初期状態＝全無効になる)
         window.onload = updateMode;
+
+        // 確認画面のときと同じような関数を追加
+        function disableSubmit(btn) {
+            // フォームが有効かチェック (required属性などがOKか)
+            if (btn.form.checkValidity()) {
+                btn.disabled = true;
+                btn.innerText = "登録中...";
+                btn.form.submit(); // JSで送信
+            }
+        }
     </script>
 </head>
 <body>
@@ -349,17 +359,24 @@
         <h2>本部発注 登録画面</h2>
 
         {% if error %} <div class="alert-error">{{ error }}</div> {% endif %}
-        {% if msg %} <div class="alert-success">{{ msg }}</div> {% endif %}
 
-                     <div class="mode-area">
-                         <input type="radio" name="mode_select" id="rb_normal" onchange="updateMode()"
-                                {% if mode=='normal' %}checked{% endif %}>
-                         <label for="rb_normal" class="mode-label">通常予約</label>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert-success">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
 
-                         <input type="radio" name="mode_select" id="rb_morning" onchange="updateMode()"
-                                {% if mode=='morning' %}checked{% endif %}>
-                         <label for="rb_morning" class="mode-label">当日朝締め</label>
-                     </div>
+        <div class="mode-area">
+            <input type="radio" name="mode_select" id="rb_normal" onchange="updateMode()"
+                   {% if mode=='normal' %}checked{% endif %}>
+            <label for="rb_normal" class="mode-label">通常予約</label>
+
+            <input type="radio" name="mode_select" id="rb_morning" onchange="updateMode()"
+                   {% if mode=='morning' %}checked{% endif %}>
+            <label for="rb_morning" class="mode-label">当日朝締め</label>
+        </div>
 
         <div class="section-box">
             <span class="section-title">単発データ登録</span>
@@ -370,7 +387,7 @@
                 <div class="form-row">
                     <div class="form-group" style="flex: 0 0 30%;">
                         <label>店舗CD</label>
-                        <input type="text" name="cucd" maxlength="3" required placeholder="111" onblur="fetchStoreName(this)">
+                        <input type="text" name="cucd" maxlength="3" required placeholder="111" onblur="fetchStoreName(this)" autofocus>
                         <div id="disp_store_name" class="info-display"></div>
                     </div>
 
@@ -396,7 +413,7 @@
                         <input type="date" name="dldt">
                     </div>
                 </div>
-                <button type="submit" class="btn-submit">登録する</button>
+                <button type="submit" class="btn-submit" onclick="disableSubmit(this)">登録する</button>
             </form>
         </div>
 

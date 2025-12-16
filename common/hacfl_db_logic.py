@@ -54,7 +54,7 @@ def check_time_and_get_config(mode):
 # =========================================================
 #  単発登録用ロジック
 # =========================================================
-def insert_single_record(mode, form_data):
+def insert_single_record(mode, form_data, user_id=None):
     """
     画面からの単発入力を検証して登録する
     """
@@ -100,6 +100,10 @@ def insert_single_record(mode, form_data):
     if errors: return False, " / ".join(errors)
 
     # 4. 登録処理 (マスタから部門などを補完してINSERT)
+    prod_info = get_product_info_by_cd(cocd) # 既存の関数を再利用
+    if not prod_info:
+        return False, f"商品CD:{cocd} はマスタに存在しません。"
+
     conn = None
     try:
         conn = get_connection(TARGET_DB)
@@ -115,7 +119,7 @@ def insert_single_record(mode, form_data):
                 '004',
                 ?,
                 ?,
-                (SELECT bucd FROM DBA.comf204 WHERE cocd = ?), -- マスタから部門取得
+                (SELECT bucd FROM DBA.comf204 WHERE cocd = ?),
                 ?,
                 ?,
                 ?
@@ -138,7 +142,7 @@ def insert_single_record(mode, form_data):
 # =========================================================
 #  CSV一括登録用ロジック
 # =========================================================
-def parse_and_insert_work(file_storage, mode):
+def parse_and_insert_work(file_storage, mode, user_id=None):
     """
     CSVを読み込み、ワークテーブルに登録する。
     """
@@ -363,7 +367,7 @@ def get_work_data_checked(batch_id, mode):
     return has_global_error, data_list
 
 
-def migrate_work_to_main(batch_id, mode):
+def migrate_work_to_main(batch_id, mode, user_id=None):
     """
     【CSV本登録用】
     modeを受け取り、INSERT先のテーブルを切り替える

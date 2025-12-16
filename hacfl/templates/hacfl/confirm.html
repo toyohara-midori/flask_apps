@@ -120,7 +120,13 @@
             gap: 15px;
         }
 
-        button {
+        /* ボタンデザインの修正 */
+        .action-buttons {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .confirm-btn {
             padding: 12px 0;
             width: 250px;
             font-size: 1.1em;
@@ -128,25 +134,27 @@
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
-        }
-
-        .btn-secondary {
-            background-color: #6c757d;
-            color: white;
-        }
-
-        .btn-primary {
             background-color: #007bff;
             color: white;
+            transition: 0.3s;
         }
 
-        .btn-secondary:hover {
-            background-color: #5a6268;
+            .confirm-btn:hover {
+                background-color: #0069d9;
+            }
+
+        .back-btn {
+            display: inline-block;
+            margin-top: 15px;
+            color: #6c757d;
+            text-decoration: none;
+            font-weight: bold;
         }
 
-        .btn-primary:hover {
-            background-color: #0069d9;
-        }
+            .back-btn:hover {
+                color: #5a6268;
+                text-decoration: underline;
+            }
 
         /* コントロールエリア */
         .controls {
@@ -199,7 +207,7 @@
 
         // 二重送信防止用
         function preventDoubleSubmit(form) {
-            const btn = document.getElementById('btn_register');
+            const btn = document.querySelector('.confirm-btn');
             if (btn) {
                 btn.disabled = true;       // ボタン無効化
                 btn.innerText = "処理中..."; // 文言変更
@@ -306,13 +314,21 @@
     </div>
 
     <div class="action-buttons">
-        <form method="POST" action="{{ url_for('dc_in.complete_insertion') }}" style="display: inline;">
-            <input type="hidden" name="import_id" value="{{ import_id }}">
+        {# ★ここを修正: hacfl.confirm へPOSTする。import_idは不要 #}
+        <form method="POST" action="{{ url_for('hacfl.confirm') }}" onsubmit="return preventDoubleSubmit(this)" style="display: inline;">
 
+            {% if has_error %}
+            <button type="button" class="confirm-btn" style="background-color:#ccc; cursor:not-allowed;" disabled>
+                エラーがあるため登録できません
+            </button>
+            {% else %}
             <button type="submit" class="confirm-btn">登録を実行</button>
+            {% endif %}
         </form>
 
-        <a href="{{ url_for('dc_in.home') }}" class="back-btn">キャンセルして戻る</a>
+        <br>
+        {# ★ここを修正: hacfl.index へ戻る #}
+        <a href="{{ url_for('hacfl.index') }}" class="back-btn">キャンセルして戻る</a>
     </div>
 
 </body>
