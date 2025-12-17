@@ -1,44 +1,59 @@
 # common/logger.py
 from flask import request
-import datetime
 
+# インポートパスの調整（環境依存を防ぐためtry-except）
 try:
     from common.db_connection import get_connection
 except ImportError:
-    # 簡易的なフォールバック（環境に合わせて直してください）
-    from common.db_connection import get_connection
+    from .db_connection import get_connection
+
+def get_client_ip():
+    """
+    クライアントのIPアドレスを取得する (プロキシ/IIS対応版)
+    """
+    if not request:
+        return '0.0.0.0'
+    
+    # IISやロードバランサ経由の場合、X-Forwarded-Forを優先
+    x_forwarded = request.headers.getlist("X-Forwarded-For")
+    if x_forwarded:
+        return x_forwarded[0].split(',')[0].strip()
+        
+    return request.remote_addr or '0.0.0.0'
 
 def write_log(module_name, user_id, action_type, message):
     """
-    weblogテーブルにログを書き込む共通関数
+    ログを書き込む共通関数
+    呼び出し元の修正を不要にするため、関数名と引数は logger.py の形式を維持し、
+    中身は正しいDB定義(DBA.weblog)に合わせています。
     """
     conn = None
     cursor = None
     try:
-        # IPアドレスの取得 (プロキシ経由の場合は X-Forwarded-For を見る等の調整が必要ですが一旦これで行きます)
-        ip = request.remote_addr if request else 'unknown'
-        
-        # DB接続
-        conn = get_connection('master') # ログはmasterに入れる想定
+        ip = get_client_ip()
+        conn = get_connection('master')
         cursor = conn.cursor()
 
+        # ★ここを「B」の正しい定義(DBA.weblog / log_dt)に修正しました
+        # 日時はSQL側で CURRENT_TIMESTAMP を入れればPython側での取得は不要です
         sql = """
-            INSERT INTO weblog (
-                log_date, module_name, user_id, action_type, message, ip_address
-            ) VALUES (
-                CURRENT_TIMESTAMP, ?, ?, ?, ?, ?
-            )
+            INSERT INTO DBA.weblog 
+            (log_dt, user_id, client_ip, module, action, msg)
+            VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)
         """
         
-        cursor.execute(sql, [module_name, user_id, action_type, message, ip])
+        # 引数のマッピング (logger.pyの引数 -> Bのテーブル定義)
+        # module_name -> module
+        # action_type -> action
+        # message     -> msg
+        cursor.execute(sql, [user_id, ip, module_name, action_type, message])
         conn.commit()
         
-        # 開発用コンソール出力
+        # 開発用出力
         print(f"[LOG] {module_name} | {user_id} | {action_type} | {message}")
 
     except Exception as e:
-        # ログ書き込みエラーで本処理を止めない
-        print(f"Log Write Error: {e}")
+        print(f"[Log Write Error] {e}")
         if conn:
             conn.rollback()
     finally:

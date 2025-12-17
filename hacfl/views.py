@@ -1,6 +1,7 @@
 from flask import render_template, request, redirect, url_for, session, Response, jsonify, flash
 from common.auth_util import get_remote_user
-from common.log_util import write_op_log
+# ★関数名を write_log に変更
+from common.logger import write_log
 
 # Blueprint本体をインポート
 from . import hacfl_bp
@@ -77,12 +78,12 @@ def index():
             success, message = insert_single_record(current_mode, form_data, user_id=current_user)
             
             if success:
-                # ログ書き込み
-                write_op_log(
+                # ★ログ書き込み修正: 関数名と引数名を新しいlogger.pyに合わせる
+                write_log(
+                    module_name='hacfl',
                     user_id=current_user,
-                    module='hacfl',
-                    action='SINGLE_INSERT',
-                    msg=f"成功: {message}"
+                    action_type='SINGLE_INSERT',
+                    message=f"成功: {message}"
                 )
                 
                 # ★ここを変更！ (PRGパターン)
@@ -104,11 +105,12 @@ def index():
                 if success:
                     session['hacfl_batch_id'] = batch_id
                     
-                    write_op_log(
+                    # ★ログ書き込み修正
+                    write_log(
+                        module_name='hacfl',
                         user_id=current_user,
-                        module='hacfl',
-                        action='CSV_UPLOAD',
-                        msg=f"BatchID: {batch_id} アップロード完了"
+                        action_type='CSV_UPLOAD',
+                        message=f"BatchID: {batch_id} アップロード完了"
                     )
                     return redirect(url_for('hacfl.confirm'))
                 else:
@@ -178,11 +180,12 @@ def confirm():
         success, message, count = migrate_work_to_main(batch_id, mode, user_id=current_user)
         
         if success:
-            write_op_log(
+            # ★ログ書き込み修正
+            write_log(
+                module_name='hacfl',
                 user_id=current_user,
-                module='hacfl',
-                action='CSV_REGIST',
-                msg=f"一括登録完了: {count}件 (BatchID: {batch_id}, Mode: {mode})"
+                action_type='CSV_REGIST',
+                message=f"一括登録完了: {count}件 (BatchID: {batch_id}, Mode: {mode})"
             )
             
             session.pop('hacfl_batch_id', None)
