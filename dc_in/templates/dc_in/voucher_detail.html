@@ -259,8 +259,8 @@
                 </div>
                 <div style="width: 1px; height: 30px; background: #ddd;"></div>
                 <div class="summary-group">
-                    <span class="summary-label">原価合計 (税抜)</span>
-                    <span class="summary-value">&yen; {{ data.total_cost }}</span>
+                    <span class="summary-label">合計ケース数</span>
+                    <span class="summary-sub-value">{{ data.total_cases }} <small>cs</small></span>
                 </div>
             </div>
         </div>
@@ -295,8 +295,15 @@
                         </td>
                         <td>{{ item.manufacturer }}</td>
                         <td class="num-col">{{ item.per_case }}</td>
-                        <td class="num-col" style="color:#888;">{{ item.loose }}</td>
-                        <td class="num-col" style="font-weight:bold;">{{ item.case }}</td>
+
+                        <td class="num-col" style="font-weight:bold; color:#333;">
+                            {{ item.loose }}
+                        </td>
+
+                        <td class="num-col" style="font-weight:bold; color: var(--primary-color);">
+                            {{ item.case }}
+                        </td>
+
                         <td class="num-col">{{ item.cost }}</td>
                         <td class="num-col" style="color: var(--primary-color);">&yen; {{ item.row_total }}</td>
                         <td class="num-col" style="{{ 'color:red;' if item.discount != '0' else 'color:#ccc;' }}">

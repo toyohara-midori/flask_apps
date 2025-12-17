@@ -388,12 +388,11 @@
                 {% endfor %}
             </select>
         </div>
-        </div>
         <div class="filter-group">
             <label>納品日</label>
             <div class="date-control">
                 <button type="button" class="date-btn" onclick="changeDate(-1)">＜</button>
-                <input type="text" name="delivery_date" value="{{ default_date }}">
+                <input type="text" name="delivery_date" value="{{ current_filters.delivery_date }}">
                 <button type="button" class="date-btn" onclick="changeDate(1)">＞</button>
             </div>
         </div>

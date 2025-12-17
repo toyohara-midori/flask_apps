@@ -219,6 +219,17 @@
             .back-link:hover {
                 text-decoration: underline;
             }
+        /* 日曜日用のスタイル */
+        .sunday-row {
+            background-color: #ffe0e0; /* 薄い赤 */
+            color: #d8000c; /* 濃い赤文字 */
+            font-weight: bold;
+        }
+
+            /* 入力欄がある場合、日曜日は入力欄の背景も少し赤くすると分かりやすい */
+            .sunday-row input {
+                background-color: #fff0f0;
+            }
     </style>
 
     <script>
@@ -298,7 +309,7 @@
             </thead>
             <tbody>
                 {% for row in monthly_list %}
-                <tr>
+                <tr class="{% if row.is_sunday %}sunday-row{% endif %}">
                     <td>
                         <span class="dummy-link" onclick="location.href='{{ url_for('dc_in.edit_limits') }}?target_date={{ row.date }}'">
                             {{ row.date }}

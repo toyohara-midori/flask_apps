@@ -1,7 +1,9 @@
 import time
+import unicodedata
 import math
 from itertools import groupby
 import datetime
+import calendar
 
 # ★相対インポート (commonフォルダのdb_connectionを使う)
 from .db_connection import get_connection
@@ -350,20 +352,25 @@ def get_voucher_detail(voucher_id):
         cols = [col[0].lower() for col in cursor.description]
         rows = cursor.fetchall()
         
-        if not rows: return None
+        if not rows:
+            return None
         
         first_row = dict(zip(cols, rows[0]))
         
+        # 値引伝票の検索
         sql_neb = "SELECT DISTINCT deno FROM DBA.dcneb WHERE deno11 = ? AND trdk = '13'"
         cursor.execute(sql_neb, [voucher_id])
         neb_row = cursor.fetchone()
         discount_id_val = neb_row[0].strip() if neb_row else ''
 
+        # 日付の整形
         d_date = first_row.get('delivery_date')
         if isinstance(d_date, (datetime.date, datetime.datetime)): 
             d_date = d_date.strftime('%Y/%m/%d')
             
         c_name = _get_center_name(first_row.get('center_code', ''))
+        
+        # データの初期化
         data = {
             'voucher_id': first_row.get('voucher_id', '').strip(), 
             'discount_id': discount_id_val,
@@ -382,32 +389,49 @@ def get_voucher_detail(voucher_id):
         total_cases = 0
         total_cost = 0
         
+        # --- ここから明細ループ (インデントに注意) ---
         for row in rows:
             d = dict(zip(cols, row))
             
-            qty = int(d.get('order_qty') or 0)
+            # 数量・入数の取得
+            total_qty_loose = int(d.get('order_qty') or 0)
+            per_case = int(d.get('per_case') or 0)
+            
+            # ケース数の計算 (整数)
+            if per_case > 0:
+                calc_cases = total_qty_loose // per_case 
+            else:
+                calc_cases = 0
+
             cost_unit = d.get('cost_price') or 0
             discount = d.get('total_disc') or 0
-            row_total = (qty * cost_unit) - discount
-            total_cases += qty
+            
+            # 行ごとの金額計算
+            row_total = (total_qty_loose * cost_unit) - discount
+            
+            # 合計値への加算 (ループ内で毎回実行)
+            total_cases += calc_cases
             total_cost += row_total
             
+            # 明細リストへの追加
             data['details'].append({
                 'p_code': d.get('item_code', '').strip(), 
                 'jan': d.get('jan') or '', 
                 'p_name': d.get('p_name') or '', 
                 'spec': d.get('spec') or '', 
                 'manufacturer': d.get('manufacturer') or '', 
-                'per_case': d.get('per_case') or 0, 
-                'loose': 0, 
-                'case': qty, 
+                'per_case': per_case, 
+                'loose': total_qty_loose,
+                'case': calc_cases,
                 'cost': "{:,.2f}".format(cost_unit), 
                 'row_total': "{:,}".format(int(row_total)), 
                 'discount': "{:,}".format(int(discount))
             })
-            
+
+        # --- ループ終了後、合計値をセット (forと同じ高さにする) ---
         data['total_cases'] = "{:,}".format(total_cases)
         data['total_cost'] = "{:,}".format(int(total_cost))
+
         return data
         
     finally:
@@ -632,9 +656,6 @@ def process_upload_csv(csv_rows):
     
     return processed_list, error_list
 
-# ==========================================
-# 5. データ登録実行 (6行分割・排他制御・タイムアウト付き)
-# ==========================================
 # ==========================================
 # 5. データ登録実行 (6行分割・排他制御・履歴記録)
 # ==========================================
@@ -1130,6 +1151,214 @@ def delete_work_table(batch_id):
         conn.commit()
     except Exception as e:
         conn.rollback()
+        raise e
+    finally:
+        cursor.close()
+        conn.close()
+
+# ==========================================
+# 6. 上限数管理 (edit_limits) 関連ロジック
+# ==========================================
+
+def get_limits_by_date(target_date_str):
+    """
+    指定日の上限設定を取得する
+    戻り値: {'m_limit': int, 's_limit': int} (m=守谷/D03, s=狭山/D04)
+    """
+    conn = get_connection('master')
+    cursor = conn.cursor()
+    try:
+        sql = """
+            SELECT cucd, max_qty 
+            FROM DBA.dc_limit_master
+            WHERE tgt_date = ?
+        """
+        cursor.execute(sql, [target_date_str])
+        rows = cursor.fetchall()
+        
+        # デフォルト値 (設定がない場合は0)
+        result = {'m_limit': 0, 's_limit': 0}
+        
+        for r in rows:
+            cucd = r[0].strip()
+            qty = r[1]
+            if cucd == 'D03':
+                result['m_limit'] = qty
+            elif cucd == 'D04':
+                result['s_limit'] = qty
+                
+        return result
+    finally:
+        cursor.close()
+        conn.close()
+
+def save_limits(target_date_str, s_val, m_val, scope):
+    """
+    上限数を保存する
+    scope: 'single' (その日のみ) or 'month' (その日から月末まで一括)
+    """
+    conn = get_connection('master')
+    cursor = conn.cursor()
+    
+    # 文字列できた数値をintに変換 (空文字やカンマ対策)
+    try:
+        val_m = int(str(m_val).replace(',', ''))
+    except:
+        val_m = 0
+        
+    try:
+        val_s = int(str(s_val).replace(',', ''))
+    except:
+        val_s = 0
+
+    try:
+        # 更新対象の日付リストを作成
+        date_list = [target_date_str]
+        
+        if scope == 'month':
+            # ターゲット日付のオブジェクト化
+            dt = datetime.datetime.strptime(target_date_str, '%Y/%m/%d')
+            year = dt.year
+            month = dt.month
+            # その月の最終日を取得
+            last_day = calendar.monthrange(year, month)[1]
+            
+            # 翌日から月末までの日付を追加
+            current_day = dt.day + 1
+            while current_day <= last_day:
+                next_date = datetime.date(year, month, current_day)
+                date_list.append(next_date.strftime('%Y/%m/%d'))
+                current_day += 1
+
+        # 対象日すべてに対して Upsert (DELETE -> INSERT) を実行
+        for d_str in date_list:
+            # 1. まず既存の設定を消す
+            cursor.execute("DELETE FROM DBA.dc_limit_master WHERE tgt_date = ?", [d_str])
+            
+            # 2. 守谷(D03)の登録 (0より大きい場合のみ)
+            if val_m > 0:
+                cursor.execute("""
+                    INSERT INTO DBA.dc_limit_master (tgt_date, cucd, max_qty, reg_date)
+                    VALUES (?, 'D03', ?, CURRENT TIMESTAMP)
+                """, [d_str, val_m])
+                
+            # 3. 狭山(D04)の登録 (0より大きい場合のみ)
+            if val_s > 0:
+                cursor.execute("""
+                    INSERT INTO DBA.dc_limit_master (tgt_date, cucd, max_qty, reg_date)
+                    VALUES (?, 'D04', ?, CURRENT TIMESTAMP)
+                """, [d_str, val_s])
+
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_monthly_limits(start_date_str):
+    import sys
+    import datetime
+    import calendar
+    
+    conn = get_connection('master')
+    cursor = conn.cursor()
+    
+    try:
+        # 日付計算
+        dt = datetime.datetime.strptime(start_date_str, '%Y/%m/%d')
+        first_day_str = dt.strftime('%Y-%m-%d')
+        end_date = dt + datetime.timedelta(days=31)
+        last_day_str = end_date.strftime('%Y-%m-%d')
+
+        # 1. データ枠作成
+        data_map = {}
+        current_date = dt
+        while current_date <= end_date:
+            d_str = current_date.strftime('%Y/%m/%d')
+            data_map[d_str] = {
+                'm_limit': 0, 'm_jv': 0, 'm_reg': 0, 'm_total': 0,
+                's_limit': 0, 's_jv': 0, 's_reg': 0, 's_total': 0
+            }
+            current_date += datetime.timedelta(days=1)
+
+        # 2. 実績データ取得
+        sql_actual = f"""
+            SELECT T.dldt, T.cucd, T.is_jv, SUM(T.calc_case)
+            FROM (
+                -- 守谷 (D03)
+                SELECT A.dldt, A.cucd, 
+                    (CASE WHEN M1.mnam LIKE 'JV%' THEN 1 ELSE 0 END) AS is_jv,
+                    (CASE WHEN M.irsu IS NULL OR M.irsu = 0 THEN A.odsu ELSE CAST(A.odsu AS NUMERIC) / M.irsu END) AS calc_case
+                FROM DBA.dcnyu03 A
+                LEFT JOIN DBA.comf204 M ON A.cocd = M.cocd AND A.bucd = M.bucd
+                LEFT JOIN DBA.comf1 M1  ON A.cocd = M1.cocd
+                WHERE A.dldt BETWEEN '{first_day_str}' AND '{last_day_str}'
+                UNION ALL
+                -- 狭山 (D04)
+                SELECT A.dldt, A.cucd, 
+                    (CASE WHEN M1.mnam LIKE 'JV%' THEN 1 ELSE 0 END) AS is_jv,
+                    (CASE WHEN M.irsu IS NULL OR M.irsu = 0 THEN A.odsu ELSE CAST(A.odsu AS NUMERIC) / M.irsu END) AS calc_case
+                FROM DBA.dcnyu04 A
+                LEFT JOIN DBA.comf204 M ON A.cocd = M.cocd AND A.bucd = M.bucd
+                LEFT JOIN DBA.comf1 M1  ON A.cocd = M1.cocd
+                WHERE A.dldt BETWEEN '{first_day_str}' AND '{last_day_str}'
+            ) AS T
+            GROUP BY T.dldt, T.cucd, T.is_jv
+        """
+        cursor.execute(sql_actual)
+        for r in cursor.fetchall():
+            if isinstance(r[0], (datetime.date, datetime.datetime)): d_val = r[0].strftime('%Y/%m/%d')
+            else: d_val = str(r[0]).replace('-', '/')
+            cucd = r[1].strip()
+            is_jv = int(r[2])
+            qty = int(float(r[3])) if r[3] is not None else 0
+            if d_val in data_map:
+                target = 'm' if cucd == 'D03' else 's'
+                data_map[d_val][f'{target}_total'] += qty
+                if is_jv == 1: data_map[d_val][f'{target}_jv'] += qty
+                else: data_map[d_val][f'{target}_reg'] += qty
+
+        # 3. 上限値取得
+        sql_limits = f"""
+            SELECT tgt_date, cucd, max_qty FROM DBA.dc_limit_master
+            WHERE tgt_date BETWEEN '{first_day_str}' AND '{last_day_str}'
+        """
+        cursor.execute(sql_limits)
+        for lr in cursor.fetchall():
+            if isinstance(lr[0], (datetime.date, datetime.datetime)): ld_val = lr[0].strftime('%Y/%m/%d')
+            else: ld_val = str(lr[0]).replace('-', '/')
+            l_cucd = lr[1].strip()
+            l_qty = int(lr[2])
+            if ld_val in data_map:
+                if l_cucd == 'D03': data_map[ld_val]['m_limit'] = l_qty
+                elif l_cucd == 'D04': data_map[ld_val]['s_limit'] = l_qty
+
+        # 4. 結果リスト作成 (★ここで is_sunday を追加)
+        result_list = []
+        for date_key in sorted(data_map.keys()):
+            item = data_map[date_key]
+            
+            # 曜日判定 (6が日曜日)
+            dt_obj = datetime.datetime.strptime(date_key, '%Y/%m/%d')
+            is_sunday = (dt_obj.weekday() == 6)
+
+            result_list.append({
+                'date': date_key,
+                'is_sunday': is_sunday, # ★これを使います
+                
+                's_jv_sched': item['s_jv'], 's_reg_sched': item['s_reg'],
+                's_total_sched': item['s_total'], 's_limit': item['s_limit'],
+                
+                'm_jv_sched': item['m_jv'], 'm_reg_sched': item['m_reg'],
+                'm_total_sched': item['m_total'], 'm_limit': item['m_limit']
+            })
+            
+        return result_list
+
+    except Exception as e:
         raise e
     finally:
         cursor.close()

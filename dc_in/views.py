@@ -225,7 +225,7 @@ def voucher_list():
         'order': request.args.get('order', 'asc')
     }
 
-    if not filters['delivery_date'] and not filters['batch_id']:
+    if not filters['delivery_date']:
         filters['delivery_date'] = datetime.date.today().strftime('%Y/%m/%d')
 
     vouchers = db_logic.get_voucher_list(filters, is_export=False)
