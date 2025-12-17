@@ -78,6 +78,42 @@
                 border-color: #888;
             }
     </style>
+    <script>
+        function validateForm(event) {
+            const fileInput = document.getElementById('csv-file');
+            const file = fileInput.files[0];
+
+            // 1. ファイルが選択されているか確認 (required属性もあるが念のため)
+            if (!file) {
+                alert("ファイルを選択してください。");
+                event.preventDefault(); // 送信キャンセル
+                return false;
+            }
+
+            // 2. 拡張子チェック (.csv)
+            const fileName = file.name;
+            // 後ろから見て .csv で終わっているか (大文字小文字無視)
+            if (!fileName.toLowerCase().endsWith('.csv')) {
+                alert("エラー：CSVファイルのみアップロード可能です。\n(.csv形式のファイルを選択してください)");
+                event.preventDefault(); // 送信キャンセル
+                return false;
+            }
+
+            // 3. ファイルサイズチェック (10MB)
+            // 10MB = 10 * 1024 * 1024 bytes
+            const maxSize = 10 * 1024 * 1024;
+            if (file.size > maxSize) {
+                // サイズをMB単位に変換して表示
+                const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+                alert(`エラー：ファイルサイズが大きすぎます。\n(上限: 10MB / 選択されたファイル: ${sizeInMB}MB)`);
+                event.preventDefault(); // 送信キャンセル
+                return false;
+            }
+
+            // 問題なければ送信続行
+            return true;
+        }
+    </script>
 </head>
 <body>
     <div class="container">
@@ -93,7 +129,8 @@
             </ul>
         </div>
         {% endif %}
-        <form method="POST" action="{{ url_for('dc_in.show_confirmation') }}" enctype="multipart/form-data">
+
+        <form method="POST" action="{{ url_for('dc_in.show_confirmation') }}" enctype="multipart/form-data" onsubmit="return validateForm(event)">
             <label for="csv-file">取り込むCSVファイルを選択してください:</label>
             <input type="file" id="csv-file" name="file" accept=".csv" required>
             <input type="submit" value="エラーチェックに進む">
@@ -111,5 +148,6 @@
                 入庫上限数量の変更
             </a>
         </div>
+    </div>
 </body>
 </html>

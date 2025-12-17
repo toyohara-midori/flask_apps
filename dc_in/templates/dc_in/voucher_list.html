@@ -378,11 +378,11 @@
         <input type="hidden" name="order" value="{{ current_filters.order }}">
 
         <div class="filter-group">
-            <label style="color: #007bff;">📂 バッチID (履歴)</label>
+            <label style="color: #007bff;">📂 受付番号ID (履歴)</label>
             <select name="batch_id" class="id-select" onchange="this.form.submit()">
                 <option value="">全て表示</option>
                 {% for b in batch_options %}
-                <option value="{{ b.val }}" {% if current_filters.batch_id= =b.val %}selected{% endif %}>
+                <option value="{{ b.val }}" {% if current_filters.batch_id==b.val %}selected{% endif %}>
                     {{ b.text }}
                 </option>
                 {% endfor %}
@@ -462,7 +462,7 @@
                     <th class="check-col"><input type="checkbox" onclick="toggleAll(this)"></th>
 
                     <th class="sortable" onclick="applySort('batch_id')">
-                        バッチID
+                        受付番号ID
                         {% if current_filters.sort == 'batch_id' %}
                         <span class="sort-icon">{{ '▲' if current_filters.order == 'asc' else '▼' }}</span>
                         {% endif %}

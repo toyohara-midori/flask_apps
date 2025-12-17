@@ -207,8 +207,7 @@ def get_voucher_list(filters, is_export=False):
                 if isinstance(val, str): row_dict[col] = val.strip()
                 else: row_dict[col] = val
             
-            # HTML側で info.batch_id と呼べるようにキーを確保（SQLでAS batch_idしてるので自動で入るはずだが念のため）
-            if 'batch_id' not in row_dict:
+            if not row_dict.get('batch_id'):
                  row_dict['batch_id'] = ''
                  
             results.append(row_dict)
