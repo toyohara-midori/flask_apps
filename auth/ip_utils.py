@@ -12,7 +12,7 @@ def extract_store_from_ip(ip: str) -> str | None:
     ・それ以外 → ゼロ埋め3桁
     """
     # ★ LOCAL環境なら強制的に "023" を返す
-    # ホントはweb.configでやりたかったんだけど、豊原のWaitress & NSSM 環境では読み込めないの
+    # ホントはweb.configでやりたかったんだけど、豊原の環境では読み込めず…
     if (
         ip.startswith("127.") or
         ip == "localhost" or
