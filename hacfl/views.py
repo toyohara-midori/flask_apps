@@ -24,8 +24,8 @@ from common.hacfl_db_logic import (
 @hacfl_bp.route('/download_template')
 def download_template():
     csv_data = [
-        "店舗CD,商品CD,発注数,発注日(任意),納品日(任意)",
-        "111,12345678,10,,"
+        "店舗CD,商品CD,発注数",
+        "111,12345678,10"
     ]
     csv_string = "\r\n".join(csv_data)
 
