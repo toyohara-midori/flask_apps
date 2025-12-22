@@ -12,7 +12,7 @@
         }
 
         .container {
-            max_width: 700px;
+            max-width: 800px; /* ★少し広げました */
             margin: 0 auto;
             background: #fff;
             padding: 30px;
@@ -46,6 +46,9 @@
             cursor: pointer;
             border: 2px solid transparent;
             opacity: 0.6;
+            transition: 0.3s;
+            background: #fff; /* 未選択時も白背景で見やすく */
+            color: #555;
         }
 
         input[type="radio"] {
@@ -74,6 +77,14 @@
             border-radius: 8px;
             margin-bottom: 30px;
             position: relative;
+            transition: opacity 0.3s; /* 無効時の変化をなめらかに */
+        }
+
+        /* 無効状態のセクション */
+        .section-disabled {
+            opacity: 0.5;
+            pointer-events: none; /* クリック自体を禁止 */
+            background-color: #f9f9f9;
         }
 
         .section-title {
@@ -113,6 +124,14 @@
             box-sizing: border-box;
         }
 
+        /* 無効化時のスタイル */
+        input:disabled {
+            background-color: #e9ecef !important;
+            cursor: not-allowed;
+            color: #6c757d;
+            border-color: #ddd;
+        }
+
         button {
             width: 100%;
             padding: 12px;
@@ -123,11 +142,6 @@
             cursor: pointer;
             transition: 0.3s;
         }
-
-        .btn-submit {
-            background-color: #555;
-        }
-        /* JSで色が変わる */
 
         .alert-error {
             background: #f8d7da;
@@ -145,7 +159,6 @@
             margin-bottom: 20px;
         }
 
-        /* ★追加: 情報表示用のスタイル (店名などを表示する文字) */
         .info-display {
             font-size: 0.85em;
             color: #0056b3;
@@ -159,113 +172,139 @@
     </style>
 
     <script>
-        // --- 1. モード切替の表示制御 ---
+        // ==========================================
+        //  日付計算ユーティリティ
+        // ==========================================
+        function formatDate(d) {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
+        function getTodayDate() {
+            return formatDate(new Date());
+        }
+
+        function getNextDay(dateStr) {
+            const d = new Date(dateStr);
+            d.setDate(d.getDate() + 1);
+            return formatDate(d);
+        }
+
+        function getLimitDate() {
+            const d = new Date();
+            d.setDate(d.getDate() + 40);
+            return formatDate(d);
+        }
+
+        // ==========================================
+        //  1. モード切替時の全体制御 (★大幅修正)
+        // ==========================================
         async function updateMode() {
             const rbNormal = document.getElementById('rb_normal');
             const rbMorning = document.getElementById('rb_morning');
-            const btns = document.querySelectorAll('.btn-submit');
 
-            // ★追加: どっちも選ばれていない場合 (初期状態)
-            if (!rbNormal.checked && !rbMorning.checked) {
-                btns.forEach(btn => {
-                    btn.disabled = true;
-                    btn.style.backgroundColor = "#ccc";
-                    btn.style.cursor = "not-allowed";
-                    btn.style.opacity = "0.6";
-                    // 元のテキストを保持しつつメッセージを出すのは難しいので、シンプルに
-                    if (btn.innerText.includes("チェックへ進む")) {
-                         btn.innerText = "業務モードを選択してください";
-                    } else {
-                         btn.innerText = "業務モードを選択してください";
-                    }
-                });
-                return; // ここで終了
-            }
+            const isNormal = rbNormal.checked;
+            const isMorning = rbMorning.checked;
+            const isNone = !isNormal && !isMorning;
 
-            // --- 以下、選択された後の処理 ---
-
-            let mode = "";
-            if(rbNormal.checked) mode = "normal";
-            else mode = "morning";
-
-            // 隠しフィールドにセット
+            // モード値をセット
+            const mode = isMorning ? "morning" : (isNormal ? "normal" : "");
             document.getElementById('hidden_mode_single').value = mode;
             document.getElementById('hidden_mode_csv').value = mode;
 
-            // 問い合わせ中表示
-            btns.forEach(btn => {
-                btn.disabled = true;
-                btn.style.opacity = "0.6";
-                btn.style.cursor = "wait";
-                btn.innerText = "確認中...";
-            });
+            // セクションごとのコンテナを取得
+            const singleSection = document.getElementById('section_single');
+            const csvSection = document.getElementById('section_csv');
 
-            // ---------------------------------------------------------
-            // API問い合わせ: DB時間チェック
-            // ---------------------------------------------------------
-            let isError = false;
-            let errorMsg = "";
+            // --- 共通: 未選択ならセクションごと薄くして触れなくする ---
+            if (isNone) {
+                singleSection.classList.add('section-disabled');
+                csvSection.classList.add('section-disabled');
 
-            try {
-                const res = await fetch(`{{ url_for('hacfl.api_check_mode_time') }}?mode=${mode}&t=${new Date().getTime()}`);
-                const data = await res.json();
-
-                if (!data.valid) {
-                    isError = true;
-                    errorMsg = data.message;
-                }
-            } catch (e) {
-                console.error(e);
-                isError = true;
-                errorMsg = "サーバー通信エラー";
-            }
-
-            // エラー表示エリア制御
-            let errDiv = document.getElementById('js_time_error');
-            if (!errDiv) {
-                const modeArea = document.querySelector('.mode-area');
-                errDiv = document.createElement('div');
-                errDiv.id = 'js_time_error';
-                errDiv.className = 'alert-error';
-                errDiv.style.textAlign = 'center';
-                errDiv.style.fontWeight = 'bold';
-                errDiv.style.marginBottom = '20px';
-                modeArea.parentNode.insertBefore(errDiv, modeArea.nextSibling);
-            }
-
-            if (isError) {
-                errDiv.innerText = errorMsg;
-                errDiv.style.display = 'block';
+                // 全ての入力を無効化 (念のため個別に回す)
+                disableAllInputsIn(singleSection, true);
+                disableAllInputsIn(csvSection, true);
             } else {
-                errDiv.style.display = 'none';
-            }
+                // モード選択中: セクション有効化
+                singleSection.classList.remove('section-disabled');
+                csvSection.classList.remove('section-disabled');
 
-            // ボタン状態更新
-            btns.forEach(btn => {
-                // ボタンの元の文言を復元するロジック
-                // (CSV側か単発側かで文言が違うため、親要素などで判定するか、固定文字にする)
-                // 今回は簡易的に、HTMLの構造（name属性など）を見ずに、
-                // この関数の外側（HTML）で定義されている「初期文言」に戻すのは難しいため、
-                // シンプルに条件分岐で書き戻します。
+                // 基本的に一旦全部有効にする
+                disableAllInputsIn(singleSection, false);
+                disableAllInputsIn(csvSection, false);
 
-                let baseText = "登録する"; // 単発側のデフォルト
-                // もし親フォームがCSV用なら
-                if (btn.closest('form').querySelector('input[name="csv_file"]')) {
-                    baseText = "チェックへ進む";
+                // === ここからモード別微調整 ===
+
+                // 1. 単発登録の発注日
+                const singleOddt = document.getElementById('single_oddt');
+                if (isMorning) {
+                    singleOddt.value = "";
+                    singleOddt.disabled = true; // 朝締めは指定不可
+                    singleOddt.placeholder = "当日扱い";
+                } else {
+                    singleOddt.disabled = false;
+                    singleOddt.placeholder = "";
                 }
 
-                if (isError) {
-                    btn.disabled = true;
+                // 2. CSV登録の発注日チェックボックス
+                const chkOddt = document.getElementById('chk_oddt');
+                const chkDldt = document.getElementById('chk_dldt');
+
+                if (isMorning) {
+                    chkOddt.checked = false;
+                    chkOddt.disabled = true; // 朝締めはチェック不可
+                    toggleDateInput(chkOddt, 'csv_oddt'); // 入力欄も連動してOFF
+                } else {
+                    chkOddt.disabled = false;
+                    // 入力欄の状態更新 (チェック状態に従う)
+                    toggleDateInput(chkOddt, 'csv_oddt');
+                }
+
+                // CSV納品日チェックは常に有効、ただし入力欄はチェック状態に従う
+                toggleDateInput(chkDldt, 'csv_dldt');
+            }
+
+            // --- ボタンの表示更新 ---
+            updateButtons(mode, isNone);
+
+            // API時間チェック
+            if (!isNone) {
+                checkTimeAPI(mode);
+            }
+        }
+
+        // 指定エリア内の input/select/textarea を一括制御
+        function disableAllInputsIn(container, disabled) {
+            const inputs = container.querySelectorAll('input, select, textarea');
+            inputs.forEach(el => {
+                // hiddenは触らない
+                if (el.type === 'hidden') return;
+                // dateタイプは toggleDateInput で管理したいので、
+                // ここでは「有効化(disabled=false)」のときだけ一旦許可し、
+                // その後個別のロジックで再ロックされる流れにする
+                el.disabled = disabled;
+            });
+        }
+
+        function updateButtons(mode, isNone) {
+            const btns = document.querySelectorAll('.btn-submit');
+            btns.forEach(btn => {
+                let baseText = btn.getAttribute('data-base-text') || btn.innerText.split('（')[0];
+                if (!btn.getAttribute('data-base-text')) {
+                    btn.setAttribute('data-base-text', baseText);
+                }
+
+                if (isNone) {
                     btn.style.backgroundColor = "#ccc";
+                    btn.disabled = true;
                     btn.style.cursor = "not-allowed";
-                    btn.style.opacity = "1.0";
-                    btn.innerText = baseText + "（受付時間外）";
+                    btn.innerText = "業務モードを選択してください";
                 } else {
                     btn.disabled = false;
                     btn.style.cursor = "pointer";
-                    btn.style.opacity = "1.0";
-
-                    if(mode === "normal") {
+                    if (mode === "normal") {
                         btn.style.backgroundColor = "#007bff";
                         btn.innerText = baseText + "（通常予約）";
                     } else {
@@ -275,82 +314,181 @@
                 }
             });
         }
-        // --- 2. 店舗名取得 (AJAX) ---
-        async function fetchStoreName(input) {
-            const cucd = input.value.trim();
-            const disp = document.getElementById('disp_store_name');
 
-            // 3桁未満ならクリアして終了
-            if (cucd.length !== 3) {
-                disp.innerText = "";
+        async function checkTimeAPI(mode) {
+            if(!mode) return;
+            const errDiv = document.getElementById('js_time_error');
+            if(errDiv) errDiv.style.display = 'none';
+
+            try {
+                const res = await fetch(`{{ url_for('hacfl.api_check_mode_time') }}?mode=${mode}&t=${new Date().getTime()}`);
+                const data = await res.json();
+                if (!data.valid) {
+                    if(errDiv) {
+                        errDiv.innerText = data.message;
+                        errDiv.style.display = 'block';
+                    }
+                    // 時間外ならボタンだけ無効化
+                    document.querySelectorAll('.btn-submit').forEach(btn => {
+                        btn.disabled = true;
+                        btn.style.backgroundColor = "#ccc";
+                        btn.style.cursor = "not-allowed";
+                        btn.innerText += " (受付時間外)";
+                    });
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        // ==========================================
+        //  2. 日付入力の制限
+        // ==========================================
+        function setDateConstraints() {
+            const today = getTodayDate();
+            const limit = getLimitDate(); // 40日後
+
+            const pairs = [
+                ['single_oddt', 'single_dldt'],
+                ['csv_oddt', 'csv_dldt']
+            ];
+
+            pairs.forEach(pair => {
+                const oddtInput = document.getElementById(pair[0]);
+                const dldtInput = document.getElementById(pair[1]);
+
+                if(!oddtInput || !dldtInput) return;
+
+                oddtInput.min = today;
+                oddtInput.max = limit;
+                dldtInput.min = getNextDay(today);
+                dldtInput.max = limit;
+
+                oddtInput.addEventListener('change', function() {
+                    const orderDate = this.value;
+                    if (orderDate) {
+                        const minDelivery = getNextDay(orderDate);
+                        dldtInput.min = minDelivery;
+                        if (dldtInput.value && dldtInput.value < minDelivery) {
+                            dldtInput.value = "";
+                        }
+                    } else {
+                        dldtInput.min = getNextDay(today);
+                    }
+                });
+            });
+        }
+
+        // ==========================================
+        //  3. CSVエリアのチェックボックス制御
+        // ==========================================
+        function toggleDateInput(checkbox, targetId) {
+            const input = document.getElementById(targetId);
+            // 親が無効なら強制OFF
+            if (checkbox.disabled) {
+                input.disabled = true;
+                input.value = "";
+                input.style.backgroundColor = "#e9ecef";
                 return;
             }
 
+            if (checkbox.checked) {
+                input.disabled = false;
+                input.style.backgroundColor = "#fff";
+            } else {
+                input.disabled = true;
+                input.value = "";
+                input.style.backgroundColor = "#e9ecef";
+            }
+        }
+
+        // ==========================================
+        //  4. AJAX (店舗/商品)
+        // ==========================================
+        async function fetchStoreName(input) {
+            const cucd = input.value.trim();
+            const disp = document.getElementById('disp_store_name');
+            if (cucd.length !== 3) { disp.innerText = ""; return; }
             try {
-                // サーバーに問い合わせ
                 const res = await fetch(`{{ url_for('hacfl.api_get_store_name') }}?cucd=${cucd}`);
                 const data = await res.json();
-
                 if (data.found) {
                     disp.innerText = data.name;
                     disp.className = "info-display";
                 } else {
-                    disp.innerText = "マスタに存在しません";
+                    disp.innerText = "マスタ未登録";
                     disp.className = "info-display info-error";
                 }
-            } catch (e) {
-                console.error(e);
-                disp.innerText = "通信エラー";
-            }
+            } catch (e) { disp.innerText = "通信エラー"; }
         }
 
-        // --- 3. 商品情報取得 (AJAX) ---
         async function fetchProductInfo(input) {
             const cocd = input.value.trim();
             const dispName = document.getElementById('disp_prod_name');
             const dispDetail = document.getElementById('disp_prod_detail');
-
-            // 8桁未満ならクリアして終了
             if (cocd.length !== 8) {
-                dispName.innerText = "";
-                dispDetail.innerText = "";
-                return;
+                dispName.innerText = ""; dispDetail.innerText = ""; return;
             }
-
             try {
                 const res = await fetch(`{{ url_for('hacfl.api_get_product_info') }}?cocd=${cocd}`);
                 const data = await res.json();
-
                 if (data.found) {
                     const i = data.info;
                     dispName.innerText = i.name;
-                    dispDetail.innerText = `規格:${i.kika} / ${i.maker} / 入数:${i.irsu} / B単:${i.btan}`;
-
+                    dispDetail.innerText = `規格:${i.kika} / ${i.maker} / 入数:${i.irsu}`;
                     dispName.className = "info-display";
                     dispDetail.className = "info-display";
                 } else {
-                    dispName.innerText = "マスタに存在しません";
+                    dispName.innerText = "マスタ未登録";
                     dispName.className = "info-display info-error";
                     dispDetail.innerText = "";
                 }
-            } catch (e) {
-                console.error(e);
-                dispName.innerText = "通信エラー";
-            }
+            } catch (e) { dispName.innerText = "通信エラー"; }
         }
 
-        // ページ読み込み時に実行 (これで初期状態＝全無効になる)
-        window.onload = updateMode;
+        // ==========================================
+        //  5. 送信時チェック
+        // ==========================================
+        function validateForm(event) {
+            const form = event.target;
+            const isCsv = form.querySelector('input[name="action_type"]').value === 'csv';
 
-        // 確認画面のときと同じような関数を追加
-        function disableSubmit(btn) {
-            // フォームが有効かチェック (required属性などがOKか)
-            if (btn.form.checkValidity()) {
-                btn.disabled = true;
-                btn.innerText = "登録中...";
-                btn.form.submit(); // JSで送信
+            if (isCsv) {
+                const oddtChk = document.getElementById('chk_oddt');
+                const dldtChk = document.getElementById('chk_dldt');
+                const oddtVal = document.getElementById('csv_oddt').value;
+                const dldtVal = document.getElementById('csv_dldt').value;
+
+                if (oddtChk.checked && !oddtVal) {
+                    alert("発注日が選択されていません。");
+                    event.preventDefault(); return false;
+                }
+                if (dldtChk.checked && !dldtVal) {
+                    alert("納品日が選択されていません。");
+                    event.preventDefault(); return false;
+                }
+                if (oddtVal && dldtVal && oddtVal >= dldtVal) {
+                    alert("納品日は発注日の翌日以降を指定してください。");
+                    event.preventDefault(); return false;
+                }
+            } else {
+                const oddtVal = document.getElementById('single_oddt').value;
+                const dldtVal = document.getElementById('single_dldt').value;
+
+                if (oddtVal && dldtVal && oddtVal >= dldtVal) {
+                    alert("納品日は発注日の翌日以降を指定してください。");
+                    event.preventDefault(); return false;
+                }
             }
+
+            const btn = form.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.innerText = "送信中...";
         }
+
+        // 初期化
+        window.addEventListener('load', function() {
+            setDateConstraints();
+            updateMode(); // これが初期ロード時に走り、全入力を無効化します
+        });
     </script>
 </head>
 <body>
@@ -358,8 +496,8 @@
     <div class="container">
         <h2>本部発注 登録画面</h2>
 
+        <div id="js_time_error" class="alert-error" style="display:none; text-align:center;"></div>
         {% if error %} <div class="alert-error">{{ error }}</div> {% endif %}
-
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         {% for category, message in messages %}
@@ -378,22 +516,22 @@
             <label for="rb_morning" class="mode-label">当日朝締め</label>
         </div>
 
-        <div class="section-box">
+        <div class="section-box" id="section_single">
             <span class="section-title">単発データ登録</span>
-            <form method="post">
+            <form method="post" onsubmit="validateForm(event)">
                 <input type="hidden" name="action_type" value="single">
                 <input type="hidden" name="mode" id="hidden_mode_single">
 
                 <div class="form-row">
                     <div class="form-group" style="flex: 0 0 30%;">
                         <label>店舗CD</label>
-                        <input type="text" name="cucd" maxlength="3" required placeholder="111" onblur="fetchStoreName(this)" autofocus>
+                        <input type="text" name="cucd" maxlength="3" required placeholder="111" onblur="fetchStoreName(this)" disabled>
                         <div id="disp_store_name" class="info-display"></div>
                     </div>
 
                     <div class="form-group">
                         <label>商品CD</label>
-                        <input type="text" name="cocd" maxlength="8" required placeholder="12345678" onblur="fetchProductInfo(this)">
+                        <input type="text" name="cocd" maxlength="8" required placeholder="12345678" onblur="fetchProductInfo(this)" disabled>
                         <div id="disp_prod_name" class="info-display" style="font-weight:bold;"></div>
                         <div id="disp_prod_detail" class="info-display" style="color:#666;"></div>
                     </div>
@@ -402,42 +540,52 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>発注数</label>
-                        <input type="number" name="odsu" required>
+                        <input type="number" name="odsu" required min="1" disabled>
                     </div>
                     <div class="form-group">
                         <label>発注日(任意)</label>
-                        <input type="date" name="oddt">
+                        <input type="date" name="oddt" id="single_oddt" disabled>
                     </div>
                     <div class="form-group">
                         <label>納品日(任意)</label>
-                        <input type="date" name="dldt">
+                        <input type="date" name="dldt" id="single_dldt" disabled>
                     </div>
                 </div>
-                <button type="submit" class="btn-submit" onclick="disableSubmit(this)">登録する</button>
+                <button type="submit" class="btn-submit" disabled>登録する</button>
             </form>
         </div>
 
-        <div class="section-box" style="margin-bottom:0;">
+        <div class="section-box" id="section_csv" style="margin-bottom:0;">
             <span class="section-title">CSV一括登録</span>
-            <form method="post" enctype="multipart/form-data">
+            <form method="post" enctype="multipart/form-data" onsubmit="validateForm(event)">
                 <input type="hidden" name="action_type" value="csv">
                 <input type="hidden" name="mode" id="hidden_mode_csv">
 
-                <div class="form-row">
+                <div class="form-row" style="align-items: flex-end;">
                     <div class="form-group">
-                        <label>発注日（一括指定）</label>
-                        <input type="date" name="csv_oddt">
+                        <label>
+                            <input type="checkbox" name="chk_oddt" id="chk_oddt" onchange="toggleDateInput(this, 'csv_oddt')" disabled>
+                            発注日を指定する
+                        </label>
+                        <input type="date" name="csv_oddt" id="csv_oddt" disabled>
                     </div>
                     <div class="form-group">
-                        <label>納品日（一括指定）</label>
-                        <input type="date" name="csv_dldt">
+                        <label>
+                            <input type="checkbox" name="chk_dldt" id="chk_dldt" onchange="toggleDateInput(this, 'csv_dldt')" disabled>
+                            納品日を指定する
+                        </label>
+                        <input type="date" name="csv_dldt" id="csv_dldt" disabled>
                     </div>
-                </div>
-                <div style="padding: 20px; background:#f8f9fa; border:2px dashed #ccc; text-align:center; margin-bottom:15px;">
-                    <input type="file" name="csv_file" accept=".csv" required>
                 </div>
 
-                <button type="submit" class="btn-submit">チェックへ進む</button>
+                <div style="padding: 20px; background:#f8f9fa; border:2px dashed #ccc; text-align:center; margin-bottom:15px;">
+                    <input type="file" name="csv_file" accept=".csv" required disabled>
+                    <p style="font-size:0.8em; color:#666; margin-top:5px;">
+                        ※フォーマット: 店舗CD, 商品CD, 発注数 (3列)
+                    </p>
+                </div>
+
+                <button type="submit" class="btn-submit" disabled>チェックへ進む</button>
 
                 <div style="text-align:right; margin-top:10px;">
                     <a href="{{ url_for('hacfl.download_template') }}" style="font-size:0.9em; color:#007bff;">
