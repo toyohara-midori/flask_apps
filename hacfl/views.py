@@ -3,6 +3,7 @@ from common.auth_util import get_remote_user
 # ★関数名を write_log に変更
 from common.logger import write_log
 
+
 # Blueprint本体をインポート
 from . import hacfl_bp
 
