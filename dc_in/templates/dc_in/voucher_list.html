@@ -38,6 +38,9 @@
                 padding: 2px;
                 height: 28px;
                 font-size: 13px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
 
         .id-select {
@@ -174,7 +177,6 @@
             white-space: nowrap;
         }
 
-        /* ヘッダー: ソート可能な列はポインタカーソルに */
         th {
             background-color: #f2f2f2;
             text-align: center;
@@ -190,7 +192,6 @@
                     background-color: #e2e6ea;
                 }
 
-        /* ソート矢印の色 */
         .sort-icon {
             font-size: 0.8em;
             margin-left: 3px;
@@ -246,16 +247,41 @@
             text-align: right;
         }
 
-        /* フィルタエリア内のセレクトボックス共通設定 */
-        .filter-group select {
-            padding: 2px;
-            height: 28px;
-            font-size: 13px;
-            /* 以下を追加: 文字が長すぎる場合に ... で省略する */
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        /* ★追加: 合計表示エリア */
+        .summary-area {
+            float: right;
+            background-color: #fff;
+            border: 2px solid #28a745;
+            padding: 5px 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+
+        .summary-item {
+            margin-left: 15px;
+            font-weight: bold;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .summary-val {
+            font-size: 18px;
+            color: #d35400;
+            margin-left: 5px;
+        }
+
+        /* ★追加: 表内の絞り込みリンク用 */
+        .drilldown-link {
+            color: #0066cc;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+            .drilldown-link:hover {
+                color: #003366;
+                background-color: #e6f2ff;
+            }
     </style>
     <script>
         function openDetailWindow(url) {
@@ -280,76 +306,33 @@
             const day = ('00' + d.getDate()).slice(-2);
             input.value = `${y}/${m}/${day}`;
         }
-        // ★追加：一覧CSVボタンを押した時の処理
+
         function submitListCsv() {
             const form = document.querySelector('form[action*="download_voucher_pdf"]');
-
-            if (!form) {
-                alert("エラー：フォームが見つかりません。");
-                return;
-            }
-
+            if (!form) { alert("エラー：フォームが見つかりません。"); return; }
             const checkboxes = form.querySelectorAll('input[name="v_ids"]:checked');
-            if (checkboxes.length === 0) {
-                alert("出力する伝票にチェックを入れてください。");
-                return;
-            }
-
+            if (checkboxes.length === 0) { alert("出力する伝票にチェックを入れてください。"); return; }
             const originalAction = form.action;
-            const originalTarget = form.target; // targetも保存しておく
-
-            // CSVは画面遷移せずダウンロードさせたいので、targetを一時的に外す手もありますが、
-            // 今の設定(target="_blank")のままでも「新しいタブが開いてすぐ閉じる＆ダウンロード開始」になるので
-            // そのままの方が安全です。
-
-            // 送信先をCSVダウンロードに変更
             form.action = "{{ url_for('dc_in.download_csv') }}";
-
             form.submit();
-
-            // 後始末
-            setTimeout(() => {
-                form.action = originalAction;
-            }, 100);
+            setTimeout(() => { form.action = originalAction; }, 100);
         }
 
-        // ★追加：一覧PDFボタンを押した時の処理
         function submitListPdf() {
-            // 1. フォームを取得 (name属性がないので document.querySelectorで取得)
-            // ページ下部のチェックボックスを囲んでいるフォームを探す
             const form = document.querySelector('form[action*="download_voucher_pdf"]');
-
-            if (!form) {
-                alert("フォームが見つかりません");
-                return;
-            }
-
-            // 2. チェックがついているか確認
+            if (!form) { alert("フォームが見つかりません"); return; }
             const checkboxes = form.querySelectorAll('input[name="v_ids"]:checked');
-            if (checkboxes.length === 0) {
-                alert("出力する伝票にチェックを入れてください。");
-                return;
-            }
-
-            // 3. 送信先を一時的に「print_list」に変更
-            const originalAction = form.action; // 元のURL(帳票用)を保存
+            if (checkboxes.length === 0) { alert("出力する伝票にチェックを入れてください。"); return; }
+            const originalAction = form.action;
             form.action = "{{ url_for('dc_in.print_list') }}";
-
-            // 4. 送信！(別タブで開く設定はフォームに既にあるはず)
             form.submit();
-
-            // 5. 送信先を元に戻す (これをしないと下のボタンも一覧印刷になっちゃう)
-            setTimeout(() => {
-                form.action = originalAction;
-            }, 100);
+            setTimeout(() => { form.action = originalAction; }, 100);
         }
-        // ★追加: ソート実行用関数
+
         function applySort(colName) {
             const form = document.querySelector('form.filter-area');
             const sortInput = form.querySelector('input[name="sort"]');
             const orderInput = form.querySelector('input[name="order"]');
-
-            // 現在と同じカラムなら順序を反転、違うなら昇順でセット
             if (sortInput.value === colName) {
                 orderInput.value = (orderInput.value === 'asc') ? 'desc' : 'asc';
             } else {
@@ -358,15 +341,52 @@
             }
             form.submit();
         }
+
+        /**
+         * ★追加: 現在の絞り込み条件に、指定したキーと値を追加して再検索する
+         */
+        function addFilter(key, value) {
+            if (!value) return;
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set(key, value);
+            window.location.search = urlParams.toString();
+        }
+
+        /**
+         * ★追加: 日付だけ維持してリセット
+         */
+        function resetFiltersKeepDate() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const dateVal = urlParams.get('delivery_date');
+            const newParams = new URLSearchParams();
+            if (dateVal) {
+                newParams.set('delivery_date', dateVal);
+            }
+            window.location.search = newParams.toString();
+        }
+
+        /**
+         * ★追加: 全てリセット
+         */
+        function resetAll() {
+            window.location.href = "{{ url_for('dc_in.voucher_list') }}";
+        }
     </script>
 </head>
 <body>
 
-    <h3 style="margin: 10px 0;">DC入荷伝票一覧</h3>
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px;">
+        <h3 style="margin: 0;">DC入荷伝票一覧</h3>
+
+        <div class="summary-area">
+            <span>合計予定数:</span>
+            <span class="summary-item">守谷C <span class="summary-val">{{ "{:,}".format(summary.moriya) }}</span> cs</span>
+            <span class="summary-item">狭山日高C <span class="summary-val">{{ "{:,}".format(summary.sayama) }}</span> cs</span>
+        </div>
+    </div>
 
     <div class="id-search">
         <form method="POST" style="display:inline;" target="_blank">
-
             <input type="text" name="voucher_id" placeholder="例: 600101" required style="padding:2px 5px; font-size:13px;">
             <button type="submit" class="primary">番号検索</button>
         </form>
@@ -440,12 +460,22 @@
                 <label for="t_jv">JV</label>
             </div>
         </div>
-        <button type="submit" class="primary">絞り込み</button>
-        <button type="button" class="reset" onclick="location.href='{{ url_for('dc_in.voucher_list') }}'">リセット</button>
+
+        <div class="filter-group" style="align-self: flex-end;">
+            <button type="submit" class="primary">絞り込み</button>
+
+            <button type="button" class="reset" onclick="resetFiltersKeepDate()" style="margin-left: 5px; background-color: #17a2b8;">
+                日付維持リセット
+            </button>
+            <button type="button" class="reset" onclick="resetAll()" style="margin-left: 5px;">
+                全リセット
+            </button>
+        </div>
     </form>
 
     <div class="export-area" style="width: 95%; margin: 0 auto; margin-bottom: 5px;">
-        <span>チェックしたリストを出力:</span> <button type="button" onclick="submitListCsv()" class="export-btn csv-btn" style="border:none; cursor:pointer;">
+        <span>チェックしたリストを出力:</span>
+        <button type="button" onclick="submitListCsv()" class="export-btn csv-btn" style="border:none; cursor:pointer;">
             📥 一覧CSV
         </button>
 
@@ -528,13 +558,25 @@
                         </a>
                     </td>
 
-                    <td class="text-center">{{ info.dept_code }}</td>
+                    <td class="text-center">
+                        <span class="drilldown-link" onclick="addFilter('dept', '{{ info.dept_code }}')" title="この部門で絞り込む">
+                            {{ info.dept_code }}
+                        </span>
+                    </td>
                     <td>{{ info.dept_name }}</td>
 
-                    <td class="text-center">{{ info.center }}</td>
+                    <td class="text-center">
+                        <span class="drilldown-link" onclick="addFilter('center', '{{ info.center_code }}')" title="このセンターで絞り込む">
+                            {{ info.center }}
+                        </span>
+                    </td>
                     <td class="text-center">{{ info.delivery_date }}</td>
 
-                    <td class="text-center">{{ info.vendor_code }}</td>
+                    <td class="text-center">
+                        <span class="drilldown-link" onclick="addFilter('vendor', '{{ info.vendor_code }}')" title="この取引先で絞り込む">
+                            {{ info.vendor_code }}
+                        </span>
+                    </td>
                     <td>{{ info.vendor }}</td>
 
                     <td>{{ info.first_p_name }}</td>

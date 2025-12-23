@@ -215,7 +215,7 @@ def voucher_list():
 
     # --- 一覧表示ロジック ---
     filters = {
-        'batch_id': request.args.get('batch_id'), # import_id -> batch_id
+        'batch_id': request.args.get('batch_id'),
         'center': request.args.get('center'),
         'dept': request.args.get('dept'),
         'vendor': request.args.get('vendor'),
@@ -228,7 +228,12 @@ def voucher_list():
     if not filters['delivery_date']:
         filters['delivery_date'] = datetime.date.today().strftime('%Y/%m/%d')
 
+    # 1. 一覧データの取得
     vouchers = db_logic.get_voucher_list(filters, is_export=False)
+    
+    # 2. ★追加: 集計データの取得 (右上の合計表示用)
+    summary = db_logic.get_voucher_summary(filters)
+
     opts = db_logic.get_filter_options()
 
     return render_template('dc_in/voucher_list.html',
@@ -238,6 +243,7 @@ def voucher_list():
         centers=opts['centers'],
         depts=opts['depts'],
         vendors=opts['vendors'],
+        summary=summary  # ★テンプレートへ渡す
     )
 
 @bp.route('/download_csv', methods=['GET', 'POST'])

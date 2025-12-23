@@ -82,6 +82,238 @@ def check_business_time(mode='normal'):
 
     return None
 
+# common/dc_in_db_logic.py
+
+# ... (既存のインポート等はそのまま) ...
+
+# ==========================================
+# ★追加: 検索条件(WHERE句)構築の共通ロジック
+# ==========================================
+def _build_search_where(filters):
+    """
+    一覧取得と集計で共通のWHERE句とパラメータを生成する
+    戻り値: (where_sql, params_list)
+    """
+    conditions = []
+    params = []
+
+    # 1. バッチID
+    if filters.get('batch_id'):
+        conditions.append("L.batch_id = ?")
+        params.append(filters['batch_id'])
+
+    # 2. センター
+    c_val = filters.get('center')
+    if c_val:
+        if '守谷' in c_val or c_val == 'D03':
+            conditions.append("T.cucd = 'D03'")
+        elif '狭山' in c_val or '日高' in c_val or c_val == 'D04':
+            conditions.append("T.cucd = 'D04'")
+        else:
+            conditions.append("T.cucd = ?")
+            params.append(c_val)
+
+    # 3. 部門
+    if filters.get('dept'):
+        conditions.append("T.bucd = ?")
+        params.append(filters['dept'])
+
+    # 4. 取引先(ベンダー)
+    if filters.get('vendor'):
+        conditions.append("T.vecd = ?")
+        params.append(filters['vendor'])
+
+    # 5. 納品日
+    if filters.get('delivery_date'):
+        conditions.append("T.dldt = ?")
+        params.append(filters['delivery_date'])
+
+    # 6. 伝票ID指定 (CSV出力用など)
+    v_ids = filters.get('voucher_ids')
+    if v_ids:
+        placeholders = ','.join('?' * len(v_ids))
+        conditions.append(f"T.deno IN ({placeholders})")
+        params.extend(v_ids)
+
+    # 7. 種別 (JV/定番)
+    # ※商品マスタ(M)への依存があるため、JOIN済みの前提
+    t_val = filters.get('type')
+    if t_val == 'jv':
+        conditions.append("M.mnam LIKE 'JV%'")
+    elif t_val == 'regular':
+        conditions.append("(M.mnam NOT LIKE 'JV%' OR M.mnam IS NULL)")
+
+    where_clause = " AND ".join(conditions)
+    if where_clause:
+        where_clause = " AND " + where_clause
+    
+    return where_clause, params
+
+
+# ==========================================
+# ★修正: 一覧取得 (共通ロジックを使用)
+# ==========================================
+def get_voucher_list(filters, is_export=False):
+    conn = get_connection(TARGET_DB)
+    cursor = conn.cursor()
+
+    try:
+        inner_columns = """
+            deno, cocd, no, cucd, bucd, oddt, dldt, trdk, vecd, 
+            odsu, dltn, prtn, md, dc, thrflg, conf, sign, rgdt, updt, upti
+        """
+        
+        # WHERE句とパラメータを生成
+        where_sql, params = _build_search_where(filters)
+
+        # 一覧表示用なので、明細行番号 = '1' を条件に追加
+        if not is_export:
+            where_sql += " AND T.no = '1'"
+
+        sql = f"""
+            SELECT 
+                T.deno as voucher_id,
+                T.no   as line_no,
+                CASE T.cucd
+                    WHEN 'D03' THEN '守谷C'
+                    WHEN 'D04' THEN '狭山日高C'
+                    ELSE T.cucd
+                END as center,
+                T.cucd as center_code,
+                T.dldt as delivery_date,
+                T.bucd as dept_code,
+                T.vecd as vendor_code,
+                T.sign as operator,
+                T.cocd as item_code,
+                T.oddt as order_date,
+                T.trdk as trans_code,
+                T.odsu as order_qty,
+                T.dltn as cost_price,
+                T.prtn as total_disc,
+                T.md   as fee_md,
+                T.dc   as fee_dc,
+                T.thrflg as pass_flag,
+                T.conf   as conf_flag,
+                T.rgdt   as reg_date,
+                T.updt   as update_date,
+                T.upti   as update_time,
+                V.nmkj as vendor,
+                N.nmkj as dept_name,
+                M.hnam as first_p_name,
+                M.mnam as manufacturer,
+                L.batch_id as batch_id
+
+            FROM (
+                SELECT {inner_columns} FROM DBA.dcnyu03
+                UNION ALL
+                SELECT {inner_columns} FROM DBA.dcnyu04
+            ) AS T
+            LEFT JOIN DBA.dc_batch_log AS L ON T.deno = L.deno_main
+            LEFT JOIN DBA.venmf AS V ON T.vecd = V.vecd
+            LEFT JOIN DBA.nammf04 AS N ON T.bucd = N.bucd AND N.brcd = '00'
+            LEFT JOIN DBA.comf1 AS M ON T.cocd = M.cocd
+            WHERE 1=1
+            {where_sql}
+        """
+
+        # ソート順の処理 (既存のまま)
+        sort_col = filters.get('sort', 'voucher_id')
+        order_dir = filters.get('order', 'asc')
+        sort_map = {
+            'voucher_id': 'T.deno', 
+            'batch_id': 'L.batch_id',
+            'dept_code': 'T.bucd',
+            'dept_name': 'N.nmkj', 'center': 'T.cucd', 'delivery_date': 'T.dldt',
+            'vendor_code': 'T.vecd', 'vendor': 'V.nmkj', 'p_name': 'M.hnam',
+            'manufacturer': 'M.mnam'
+        }
+        sql_sort = sort_map.get(sort_col, 'T.deno')
+        sql += f" ORDER BY {sql_sort} {order_dir}"
+
+        cursor.execute(sql, params)
+        
+        # ... (結果取得処理は既存と同じ) ...
+        columns = [column[0] for column in cursor.description]
+        results = []
+        for row in cursor.fetchall():
+            row_dict = {}
+            for col, val in zip(columns, row):
+                if isinstance(val, str): row_dict[col] = val.strip()
+                else: row_dict[col] = val
+            
+            if not row_dict.get('batch_id'):
+                 row_dict['batch_id'] = ''
+                 
+            results.append(row_dict)
+        return results
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ==========================================
+# ★追加: 集計用関数 (B案: 入数割り返し計算)
+# ==========================================
+def get_voucher_summary(filters):
+    """
+    現在のフィルタ条件に合致する伝票の「総ケース数」を計算して返す。
+    ※明細全行を対象とし、入数マスタ(comf204)を使ってケース換算する。
+    """
+    conn = get_connection(TARGET_DB)
+    cursor = conn.cursor()
+    try:
+        # WHERE句生成 (一覧と同じ条件)
+        where_sql, params = _build_search_where(filters)
+        
+        # 集計用SQL
+        # 入数(irsu)が0またはNULLの場合は、バラ数(odsu)をそのまま加算するロジックとしています
+        # 必要に応じて CAST(... AS INTEGER) で切り捨てを行っています
+        sql = f"""
+            SELECT 
+                SUM(CASE 
+                    WHEN T.cucd = 'D03' THEN 
+                        (CASE WHEN C.irsu IS NULL OR C.irsu = 0 THEN CAST(T.odsu AS INTEGER) 
+                              ELSE CAST(T.odsu AS INTEGER) / CAST(C.irsu AS INTEGER) END)
+                    ELSE 0 
+                END) as moriya_total,
+                
+                SUM(CASE 
+                    WHEN T.cucd = 'D04' THEN 
+                        (CASE WHEN C.irsu IS NULL OR C.irsu = 0 THEN CAST(T.odsu AS INTEGER) 
+                              ELSE CAST(T.odsu AS INTEGER) / CAST(C.irsu AS INTEGER) END)
+                    ELSE 0 
+                END) as sayama_total
+
+            FROM (
+                SELECT cucd, bucd, vecd, dldt, cocd, odsu, deno, trdk 
+                FROM DBA.dcnyu03 
+                UNION ALL 
+                SELECT cucd, bucd, vecd, dldt, cocd, odsu, deno, trdk 
+                FROM DBA.dcnyu04
+            ) AS T
+            LEFT JOIN DBA.dc_batch_log AS L ON T.deno = L.deno_main
+            LEFT JOIN DBA.comf1 AS M ON T.cocd = M.cocd
+            -- 集計用に入数マスタを結合
+            LEFT JOIN DBA.comf204 AS C ON T.cocd = C.cocd AND T.bucd = C.bucd
+            WHERE 1=1
+            {where_sql}
+        """
+        
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+        
+        summary = {
+            'moriya': 0,
+            'sayama': 0
+        }
+        if row:
+            summary['moriya'] = int(row[0]) if row[0] else 0
+            summary['sayama'] = int(row[1]) if row[1] else 0
+            
+        return summary
+    finally:
+        cursor.close()
+        conn.close()
 # ==========================================
 # 1. 一覧・検索機能 (履歴テーブル結合版)
 # ==========================================
