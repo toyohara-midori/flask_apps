@@ -84,8 +84,6 @@ def check_business_time(mode='normal'):
 
 # common/dc_in_db_logic.py
 
-# ... (既存のインポート等はそのまま) ...
-
 # ==========================================
 # ★追加: 検索条件(WHERE句)構築の共通ロジック
 # ==========================================
@@ -728,12 +726,15 @@ def get_related_discount_vouchers(parent_voucher_ids):
         conn.close()
 
 # ==========================================
-# 4. CSVアップロード処理 (日付柔軟対応版)
+# 4. CSVアップロード処理 (バラ数入力・ケース計算・余りチェック版)
 # ==========================================
 def process_upload_csv(csv_rows):
     """
-    CSVを全行チェック。日付形式(YYYY/MM/DD, YYYY-MM-DD)を柔軟に解釈し、
-    2025/01/01 のような標準形式に統一して返す。
+    CSVを全行チェック。
+    【変更点】
+    - 数量(7列目)を「バラ総数」として読み込む
+    - マスタの入数で割り、ケース数を計算する
+    - 割り切れない(余りが出る)場合はエラーにする
     """
     conn = get_connection('master')
     cursor = conn.cursor()
@@ -761,48 +762,46 @@ def process_upload_csv(csv_rows):
 
             # --- 1. データの取得 & お掃除 ---
             center_code = clean_str(row[0])
-            raw_date    = clean_str(row[1]) # 元の日付文字列
+            raw_date    = clean_str(row[1])
             vendor_code = clean_str(row[2])
             fee_md      = clean_str(row[3])
             fee_dc      = clean_str(row[4])
             item_code   = clean_str(row[5])
-            raw_qty     = clean_str(row[6])
+            raw_qty     = clean_str(row[6]) # ★ここは「バラ数」として扱う
             raw_cost    = clean_str(row[7])
             pass_flag   = clean_str(row[8])
             raw_disc    = clean_str(row[9])
 
             # --- 2. バリデーション & 型変換 ---
 
-            # A. 日付チェック (ハイフン/スラッシュ、ゼロ埋め有無を許容)
+            # A. 日付チェック
             formatted_date = ""
-            date_formats = ['%Y/%m/%d', '%Y-%m-%d'] # 許容するフォーマット
+            date_formats = ['%Y/%m/%d', '%Y-%m-%d']
             date_obj = None
             
             for fmt in date_formats:
                 try:
-                    # ここで 2025-1-1 も 2025-01-01 も解釈されます
                     date_obj = datetime.datetime.strptime(raw_date, fmt)
-                    break # 成功したらループを抜ける
+                    break 
                 except ValueError:
-                    continue # 失敗したら次のフォーマットを試す
+                    continue
             
             if date_obj:
-                # 成功: DB登録用に "YYYY/MM/DD" に統一する
                 formatted_date = date_obj.strftime('%Y/%m/%d')
             else:
-                # 失敗: エラーリストへ
-                error_list.append(f"{line_no}行目: 納品日 '{raw_date}' の形式が不正です。(YYYY/MM/DD または YYYY-MM-DD)")
+                error_list.append(f"{line_no}行目: 納品日 '{raw_date}' の形式が不正です。")
 
             # B. センターコード
             if center_code not in ['D03', 'D04']:
-                error_list.append(f"{line_no}行目: センターコード '{center_code}' が不正です。(D03, D04のみ可)")
+                error_list.append(f"{line_no}行目: センターコード '{center_code}' が不正です。")
 
-            # C. 数値変換
+            # C. 数値変換 (バラ数として取得)
             try:
-                qty_case = int(float(raw_qty))
+                # ★修正: ここは「バラ総数」
+                qty_loose_input = int(float(raw_qty))
             except ValueError:
-                error_list.append(f"{line_no}行目: 数量 '{raw_qty}' は数値で入力してください。")
-                qty_case = 0
+                error_list.append(f"{line_no}行目: 納品数 '{raw_qty}' は数値で入力してください。")
+                qty_loose_input = 0
             
             try:
                 cost_unit = float(raw_cost)
@@ -853,15 +852,37 @@ def process_upload_csv(csv_rows):
             d_res = cursor.fetchone()
             dept_name = d_res[0] if d_res else ""
 
+            # --- ★追加: ケース計算と余りチェック ---
+            calc_cases = 0
+            
+            if not error_list:
+                if per_case > 0:
+                    # 割り算の余りをチェック
+                    remainder = qty_loose_input % per_case
+                    if remainder != 0:
+                        error_list.append(f"{line_no}行目: 納品数({qty_loose_input})が入数({per_case})で割り切れません。ケース単位になるよう修正してください。")
+                    else:
+                        # 割り切れるならケース数を計算
+                        calc_cases = qty_loose_input // per_case
+                else:
+                    # 入数0の場合はケース計算できない（あるいはバラ=ケース？）
+                    # ここでは便宜上、ケース数=0 または エラーにする運用などありますが、
+                    # 入数未登録商品の場合はエラーにしないよう、ケース数0のまま進めます。
+                    calc_cases = 0
+                    # もし入数0をエラーにしたいなら以下を解除
+                    # error_list.append(f"{line_no}行目: 商品の入数がマスタに設定されていません。")
+
             # --- エラーがなければリストに追加 ---
             if not error_list: 
-                total_qty_loose = qty_case * per_case
-                row_cost_total = (total_qty_loose * cost_unit)
-                row_disc_total = (total_qty_loose * disc_unit)
+                # 金額計算 (バラ総数 × 単価)
+                row_cost_total = (qty_loose_input * cost_unit)
+                row_disc_total = (qty_loose_input * disc_unit)
 
                 detail_row = [
                     item_code, jan, p_name, spec, manufacturer,
-                    total_qty_loose, qty_case, fee_md, fee_dc,
+                    qty_loose_input, # [5] バラ総数 (CSV値)
+                    calc_cases,      # [6] 計算したケース数
+                    fee_md, fee_dc,
                     "{:,.2f}".format(cost_unit),
                     "{:,.0f}".format(row_cost_total),
                     "{:,.0f}".format(row_disc_total)
@@ -869,14 +890,14 @@ def process_upload_csv(csv_rows):
 
                 processed_list.append({
                     'center_name': '守谷C' if 'D03' in center_code else '狭山日高C',
-                    'delivery_date': formatted_date, # ★整形済みの日付を使用
+                    'delivery_date': formatted_date,
                     'vendor_code': vendor_code,
                     'vendor_name': vendor_name,
                     'dept_code': dept_code,
                     'dept_name': dept_name,
                     'manufacturer': manufacturer,
                     'detail_row': detail_row,
-                    'raw_case': qty_case,
+                    'raw_case': calc_cases, # 集計用には計算したケース数を使う
                     'pass_flag': pass_flag
                 })
 

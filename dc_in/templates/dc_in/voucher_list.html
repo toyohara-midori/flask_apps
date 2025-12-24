@@ -342,9 +342,6 @@
             form.submit();
         }
 
-        /**
-         * ★追加: 現在の絞り込み条件に、指定したキーと値を追加して再検索する
-         */
         function addFilter(key, value) {
             if (!value) return;
             const urlParams = new URLSearchParams(window.location.search);
@@ -352,9 +349,6 @@
             window.location.search = urlParams.toString();
         }
 
-        /**
-         * ★追加: 日付だけ維持してリセット
-         */
         function resetFiltersKeepDate() {
             const urlParams = new URLSearchParams(window.location.search);
             const dateVal = urlParams.get('delivery_date');
@@ -365,11 +359,48 @@
             window.location.search = newParams.toString();
         }
 
-        /**
-         * ★追加: 全てリセット
-         */
         function resetAll() {
             window.location.href = "{{ url_for('dc_in.voucher_list') }}";
+        }
+
+        /**
+         * ★変更: バッチID選択時は他のフィルタを全クリアして送信
+         */
+        function onBatchChange(select) {
+            const form = select.form;
+
+            // 1. 日付をクリア
+            const dateInput = form.querySelector('input[name="delivery_date"]');
+            if (dateInput) dateInput.value = "";
+
+            // 2. センターを「全て」に (value=""のラジオボタンを選択)
+            const centerRadios = form.querySelectorAll('input[name="center"]');
+            for (const radio of centerRadios) {
+                if (radio.value === "") {
+                    radio.checked = true;
+                    break;
+                }
+            }
+
+            // 3. 部門を「全て」に
+            const deptSelect = form.querySelector('select[name="dept"]');
+            if (deptSelect) deptSelect.value = "";
+
+            // 4. 取引先を「全て」に
+            const vendorSelect = form.querySelector('select[name="vendor"]');
+            if (vendorSelect) vendorSelect.value = "";
+
+            // 5. 種別を「全て」に
+            const typeRadios = form.querySelectorAll('input[name="type"]');
+            for (const radio of typeRadios) {
+                if (radio.value === "all") {
+                    radio.checked = true;
+                    break;
+                }
+            }
+
+            // フォーム送信
+            form.submit();
         }
     </script>
 </head>
@@ -399,7 +430,7 @@
 
         <div class="filter-group">
             <label style="color: #007bff;">📂 受付番号ID (履歴)</label>
-            <select name="batch_id" class="id-select" onchange="this.form.submit()">
+            <select name="batch_id" class="id-select" onchange="onBatchChange(this)">
                 <option value="">全て表示</option>
                 {% for b in batch_options %}
                 <option value="{{ b.val }}" {% if current_filters.batch_id==b.val %}selected{% endif %}>
@@ -461,13 +492,19 @@
             </div>
         </div>
 
-        <div class="filter-group" style="align-self: flex-end;">
-            <button type="submit" class="primary">絞り込み</button>
+        <div class="filter-group" style="align-self: flex-end; flex-direction: row; align-items: flex-end;">
+            <button type="submit" class="primary" style="margin-right: 20px;">絞り込み</button>
 
-            <button type="button" class="reset" onclick="resetFiltersKeepDate()" style="margin-left: 5px; background-color: #17a2b8;">
+            <button type="button" class="reset" onclick="resetFiltersKeepDate()"
+                    {% if not current_filters.delivery_date %}
+                    disabled style="margin-right: 5px; background-color: #ccc; cursor: not-allowed;"
+                    {% else %}
+                    style="margin-right: 5px; background-color: #17a2b8;"
+                    {% endif %}>
                 日付維持リセット
             </button>
-            <button type="button" class="reset" onclick="resetAll()" style="margin-left: 5px;">
+
+            <button type="button" class="reset" onclick="resetAll()">
                 全リセット
             </button>
         </div>

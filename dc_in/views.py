@@ -45,7 +45,6 @@ def show_confirmation():
         csv_input = csv.reader(stream)
         rows = list(csv_input)
     except Exception as e:
-        # ★追加: CSV自体の読み込み失敗ログ
         write_log('dc_in', current_user_id, 'ERROR', f'CSV読込失敗: ファイル[{file.filename}] / {e}')
         return f"CSV読み込みエラー: {e}", 500
 
@@ -53,19 +52,15 @@ def show_confirmation():
     try:
         enriched_list, error_msgs = db_logic.process_upload_csv(rows)
     except Exception as e:
-        # ★追加: システムエラーログ
         write_log('dc_in', current_user_id, 'ERROR', f'CSV解析システムエラー: {e}')
         return f"システムエラー: {e}", 500
 
     # ==========================================
-    # ★ エラーチェック分岐 (マスタ不備など)
+    # ★ エラーチェック分岐
     # ==========================================
     if error_msgs:
-        # ★追加: バリデーションエラーログ (エラー件数を記録)
         err_count = len(error_msgs)
         write_log('dc_in', current_user_id, 'CHECK_NG', f'CSV内容不備: {err_count}件のエラー / ファイル[{file.filename}]')
-        
-        # エラーがある場合は、index.html に戻してエラーを表示
         return render_template('dc_in/index.html', error_list=error_msgs)
 
     # ==========================================
@@ -73,13 +68,15 @@ def show_confirmation():
     # ==========================================
     
     # A. バッチID生成
-    batch_id = f"{uuid.uuid4()}-{current_user_id}"
+    import random
+    now_str = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+    rand_str = ''.join(random.choices('0123456789', k=4))
+    batch_id = f"{now_str}-{rand_str}"
     
     # B. ワークテーブルへ保存
     try:
         db_logic.save_to_work_table(batch_id, current_user_id, enriched_list)
         
-        # ★追加: 成功ログ (件数と受付番号を記録)
         row_count = len(enriched_list)
         write_log('dc_in', current_user_id, 'UPLOAD', f'CSV確認画面へ遷移: 受付番号[{batch_id}] / {row_count}件 / ファイル[{file.filename}]')
         
@@ -87,15 +84,26 @@ def show_confirmation():
         write_log('dc_in', current_user_id, 'ERROR', f'ワークテーブル保存失敗: {e}')
         return f"データ一時保存エラー: {e}", 500
 
-    # (以下、集計処理などは変更なし)
+    # -----------------------------------------------------------
+    # 集計処理 (修正版)
+    # -----------------------------------------------------------
+    
+    # ★修正1: 初期化をループの外に出す！
+    center_groups = {}
+
+    # ★修正2: groupbyの前に必ずソートする (センター順)
+    enriched_list.sort(key=lambda x: x['center_name'])
+
     for center, items_in_center in groupby(enriched_list, key=lambda x: x['center_name']):
         group_list = []
+        
+        # サブグループ化のキー: (納品日, ベンダーCD, 部門CD)
         sub_key = lambda x: (x['delivery_date'], x['vendor_code'], x['dept_code'])
         
         center_items_list = list(items_in_center)
+        # グループ内もソート
         center_items_list.sort(key=sub_key)
-        center_groups = {}
-
+        
         for (d_date, v_code, dept_code), items in groupby(center_items_list, key=sub_key):
             items = list(items)
             first = items[0]
@@ -110,6 +118,7 @@ def show_confirmation():
             }
             group_list.append(group_obj)
         
+        # センターごとのリストを辞書に格納
         center_groups[center] = group_list
 
     # 全体集計
@@ -165,14 +174,12 @@ def complete_insertion():
         # ==========================================
         write_log('dc_in', user_id, 'INSERT', f'CSV本登録完了: 受付番号[{import_id}] / {result_msg}')
 
-        # 3. 完了画面用の新しいID生成 (表示用)
-        now = datetime.datetime.now()
-        display_import_id = f"{now.strftime('%Y%m%d-%H%M')}-{user_id}"
-
         # 4. ワークテーブルのお掃除
         db_logic.delete_work_table(import_id)
 
-        return render_template('dc_in/complete.html', new_import_id=display_import_id)
+        # ★修正: 表示用IDを新規生成するのではなく、登録に使った import_id をそのまま渡す
+        # (これで一覧画面がこのIDを使ってフィルタリングできるようになります)
+        return render_template('dc_in/complete.html', new_import_id=import_id)
 
     except Exception as e:
         # ★追加: 登録失敗ログ
@@ -225,10 +232,10 @@ def voucher_list():
         'order': request.args.get('order', 'asc')
     }
 
-    if not filters['delivery_date']:
+    if not filters['batch_id'] and not filters['delivery_date']:
         filters['delivery_date'] = datetime.date.today().strftime('%Y/%m/%d')
 
-    # 1. 一覧データの取得
+
     vouchers = db_logic.get_voucher_list(filters, is_export=False)
     
     # 2. ★追加: 集計データの取得 (右上の合計表示用)
@@ -434,3 +441,26 @@ def download_template():
     output.headers["Content-Disposition"] = "attachment; filename=template.csv"
     output.headers["Content-type"] = "text/csv"
     return output
+
+from urllib.parse import quote  # 日本語ファイル名用
+
+@bp.route('/download_sample')
+def download_sample():
+    # 指定されたダミーデータ
+    csv_content = """D03,2026-01-01,03000035,0.010,0.060,15690380,2400,139.00,,0.00
+D03,2026-01-01,03000035,0.010,0.060,15690399,7400,74.00,,0.00
+D03,2026-01-01,03000035,0.010,0.060,16577650,5400,296.00,,0.00
+D04,2026-01-01,03000035,0.010,0.060,15690380,2400,139.00,,0.00
+D04,2026-01-01,03000035,0.010,0.060,15690399,7400,74.00,,0.00
+D04,2026-01-01,03000035,0.010,0.060,16577650,5400,296.00,,0.00"""
+
+    # Excel等で文字化けしないよう cp932(Shift_JIS) でエンコード
+    response = make_response(csv_content.encode('cp932'))
+    
+    # 日本語ファイル名を設定 (RFC 5987準拠)
+    filename = "テスト用ダミーデータ.csv"
+    encoded_filename = quote(filename)
+    response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{encoded_filename}"
+    response.headers["Content-type"] = "text/csv"
+    
+    return response

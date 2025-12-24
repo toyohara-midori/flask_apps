@@ -268,15 +268,16 @@
 
                 <div style="font-weight: bold; padding: 5px; background-color: #eee; display: flex; justify-content: space-between;">
                     <span>部門: ({{ group.dept_code }}) {{ group.dept_name }}</span>
-                    <span>📦 合計ケース数: {{ total_cases.all }}</span>
+                    <span>📦 合計ケース数: {{ "{:,}".format(total_cases.all) }}</span>
                 </div>
 
                 <div class="summary-row">
                     <span></span>
                     <span>
-                        <strong>JVケース</strong>: <span style="color: #d9534f;">{{ total_cases.jv }}</span> ケース
+                        {# ★変更: 左に定番、右にJV。カンマ区切り追加 #}
+                        <strong>定番ケース</strong>: <span style="color: #5bc0de;">{{ "{:,}".format(total_cases.other) }}</span> ケース
                         &nbsp;|&nbsp;
-                        <strong>定番ケース</strong>: <span style="color: #5bc0de;">{{ total_cases.other }}</span> ケース
+                        <strong>JVケース</strong>: <span style="color: #d9534f;">{{ "{:,}".format(total_cases.jv) }}</span> ケース
                     </span>
                 </div>
 
@@ -305,13 +306,16 @@
                             <td>{{ detail_row[2] }}</td>
                             <td>{{ detail_row[3] }}</td>
                             <td>{{ detail_row[4] }}</td>
-                            <td>{{ detail_row[5] }}</td>
-                            <td>{{ detail_row[6]|int }}</td>
+                            {# ★変更: カンマ区切りを追加 #}
+                            <td>{{ "{:,}".format(detail_row[5]|int) }}</td>
+                            <td>{{ "{:,}".format(detail_row[6]|int) }}</td>
                             <td>{{ detail_row[7] }}</td>
                             <td>{{ detail_row[8] }}</td>
-                            <td>{{ detail_row[9] }}</td>
+                            {# ★変更: 原単価をカンマ区切り（金額らしく小数点2桁表示） #}
+                            <td>{{ "{:,.2f}".format(detail_row[9]|float) }}</td>
                             <td>{{ detail_row[10] }}</td>
-                            <td>{{ detail_row[11] }}</td>
+                            {# ★変更: 値引金額をカンマ区切り #}
+                            <td>{{ "{:,}".format(detail_row[11]|float|int) }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -332,8 +336,9 @@
                     <tr>
                         <th>センター名</th>
                         <th>納品日</th>
-                        <th>JVケース</th>
+                        {# ★変更: 左に定番、右にJV #}
                         <th>定番ケース</th>
+                        <th>JVケース</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -341,8 +346,9 @@
                     <tr>
                         <td>{{ summary.center }}</td>
                         <td>{{ summary.date }}</td>
-                        <td style="color: #d9534f;">{{ summary.jv }}</td>
-                        <td style="color: #5bc0de;">{{ summary.other }}</td>
+                        {# ★変更: 左に定番、右にJV。カンマ区切り追加 #}
+                        <td style="color: #5bc0de;">{{ "{:,}".format(summary.other) }}</td>
+                        <td style="color: #d9534f;">{{ "{:,}".format(summary.jv) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

@@ -5,42 +5,69 @@
     <title>完了</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: "Helvetica Neue", Arial, sans-serif;
             margin: 50px;
             text-align: center;
+            background-color: #f9f9f9;
         }
 
         .container {
             max-width: 600px;
             margin: auto;
             padding: 40px;
-            border: 1px solid #ddd;
+            background: white;
+            border: 1px solid #ccc;
             border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
         h1 {
             color: #28a745;
+            margin-bottom: 20px;
+        }
+
+        p {
+            margin-bottom: 20px;
+            color: #333;
         }
 
         .batch-info {
-            background: #f0f8ff;
+            background: #e8f5e9;
             padding: 15px;
             margin: 20px 0;
             border-radius: 5px;
+            border: 1px solid #c3e6cb;
             font-weight: bold;
+            color: #155724;
         }
 
         .btn {
-            padding: 12px 25px;
+            padding: 12px 30px;
             background-color: #007bff;
             color: white;
             text-decoration: none;
             border-radius: 5px;
             display: inline-block;
+            font-weight: bold;
+            transition: background 0.3s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
             .btn:hover {
                 background-color: #0056b3;
+                transform: translateY(-1px);
+            }
+
+        .home-link {
+            display: inline-block;
+            margin-top: 30px;
+            color: #666;
+            font-size: 0.9em;
+            text-decoration: none;
+        }
+
+            .home-link:hover {
+                text-decoration: underline;
             }
     </style>
 </head>
@@ -51,14 +78,18 @@
 
         <div class="batch-info">
             今回の取込ID (Batch ID):<br>
-            <span style="font-size: 1.5em; color: #333;">{{ new_import_id }}</span>
+            <span style="font-size: 1.3em;">{{ new_import_id }}</span>
         </div>
 
         <p>以下のボタンから一覧画面へ移動し、<br>CSV・帳票の出力を行ってください。</p>
 
-        <a href="{{ url_for('dc_in.voucher_list', import_id=new_import_id) }}" class="btn">
+        <a href="{{ url_for('dc_in.voucher_list', batch_id=new_import_id) }}" class="btn">
             登録内容を表示・出力する
         </a>
+
+        <br>
+
+        <a href="{{ url_for('dc_in.home') }}" class="home-link">トップ画面へ戻る</a>
     </div>
 </body>
 </html>

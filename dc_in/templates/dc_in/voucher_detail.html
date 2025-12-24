@@ -297,11 +297,11 @@
                         <td class="num-col">{{ item.per_case }}</td>
 
                         <td class="num-col" style="font-weight:bold; color:#333;">
-                            {{ item.loose }}
+                            {{ "{:,}".format(item.loose) }}
                         </td>
 
                         <td class="num-col" style="font-weight:bold; color: var(--primary-color);">
-                            {{ item.case }}
+                            {{ "{:,}".format(item.case) }}
                         </td>
 
                         <td class="num-col">{{ item.cost }}</td>
