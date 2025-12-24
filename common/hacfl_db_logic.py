@@ -20,7 +20,7 @@ MODE_CONFIG = {
         'end':   '20:00'
     },
     'morning': {
-        'name': '当日朝締め',     # 朝締め発注
+        'name': '当日朝締め',      # 朝締め発注
         'table': 'DBA.hacfl04',  # ★朝は hacfl04
         'start': '05:00',
         'end':   '10:50'
@@ -73,35 +73,31 @@ def insert_single_record(mode, form_data, user_id=None):
     dldt = form_data.get('dldt', '').strip()
     if not dldt: dldt = None
 
+    # ★朝締めなら強制的にNULL(None)にする
+    if mode == 'morning':
+        oddt = None
+
     # 3. 簡易バリデーション
     errors = []
     if len(cucd) != 3: errors.append("店舗CDは3桁必須")
     if len(cocd) != 8: errors.append("商品CDは8桁必須")
     if not odsu.isdigit() or int(odsu) == 0: errors.append("発注数は1以上の数値")
     
-    # ★追加: 発注日(oddt)のモード別チェック
+    # 発注日(oddt)の過去日チェック（入力がある場合のみ）
     if oddt:
         try:
             input_date = datetime.strptime(oddt, '%Y-%m-%d').date()
-            # DB時間から「今日」を取得
             now = get_db_server_time()
             today = now.date()
 
             if input_date < today:
                 errors.append(f"発注日に過去の日付は指定できません({oddt})")
-            
-            # 朝締めは「当日」以外不可
-            if mode == 'morning' and input_date != today:
-                errors.append(f"当日朝締めでは、当日以外の発注日は指定できません")
-                
         except ValueError:
             errors.append("発注日の形式が不正です")
 
     if errors: return False, " / ".join(errors)
 
-    # 4. 登録処理 (マスタから部門などを補完してINSERT)
-    # prod_info = get_product_info_by_cd(cocd) # チェック用だが必須ではないため省略可
-
+    # 4. 登録処理
     conn = None
     try:
         conn = get_connection(TARGET_DB)
@@ -122,7 +118,7 @@ def insert_single_record(mode, form_data, user_id=None):
                 ?,
                 ?
         """
-        # cocdは2回渡す(INSERT値用とSELECT条件用)
+        # cocdは2回渡す
         params = [cucd, cocd, cocd, odsu, oddt, dldt]
         
         cursor.execute(sql, params)
@@ -138,7 +134,7 @@ def insert_single_record(mode, form_data, user_id=None):
 
 
 # =========================================================
-#  CSV一括登録用ロジック (引数追加・ロジック変更)
+#  CSV一括登録用ロジック
 # =========================================================
 def parse_and_insert_work(file_storage, mode, user_id=None, fixed_oddt=None, fixed_dldt=None):
     """
@@ -149,7 +145,7 @@ def parse_and_insert_work(file_storage, mode, user_id=None, fixed_oddt=None, fix
     is_ok, msg, config = check_time_and_get_config(mode)
     if not is_ok: return False, msg, None
 
-    # 朝締めモードの場合、強制的に発注日指定なし(当日扱い)にする
+    # ★朝締めモードの場合、強制的に発注日指定なし(NULL)にする
     if mode == 'morning':
         fixed_oddt = None
 
@@ -167,6 +163,10 @@ def parse_and_insert_work(file_storage, mode, user_id=None, fixed_oddt=None, fix
 
     batch_id = str(uuid.uuid4())
     
+    # DB時間を取得（お掃除 & updt登録用）
+    now_server = get_db_server_time()
+    today_date = now_server.date()
+
     # 文字コード判別
     csv_text = ""
     raw_data = file_storage.stream.read()
@@ -185,40 +185,38 @@ def parse_and_insert_work(file_storage, mode, user_id=None, fixed_oddt=None, fix
     except Exception as e:
         return False, f"CSV読込エラー: {str(e)}", None
 
-    # ヘッダー判定 (3列目 'odsu' が数字でなければヘッダーとみなす)
-    start_line_num = 1
-    if len(rows) > 0:
-        first_row = rows[0]
-        # ★3列あればOK
-        if len(first_row) >= 3:
-            val_chk = first_row[2].strip()
-            if not val_chk.isdigit():
-                rows.pop(0)
-                start_line_num = 2 
-
     if len(rows) == 0:
         return False, "データ行が含まれていません。", None
+
+    # ★ヘッダー判定ロジックを廃止し、「ヘッダーなし固定」とする
+    # そのまま rows を回す
 
     conn = None
     try:
         conn = get_connection(TARGET_DB)
         cursor = conn.cursor()
 
-        # お掃除
-        sql_cleanup = "DELETE FROM DBA.hacfl04_work WHERE oddt < ?"
-        cursor.execute(sql_cleanup, (date.today(),))
+        # ★お掃除: 新設した updt (作業日) を見て、過去のゴミデータを削除
+        # これにより NULL 許可の oddt に依存せず安全に削除可能
+        sql_cleanup = "DELETE FROM DBA.hacfl04_work WHERE updt < ?"
+        cursor.execute(sql_cleanup, (today_date,))
 
-        # インサートSQL (CSVの日付列は無視し、固定値をセット)
+        # インサートSQL (updt を追加)
         sql = """
             INSERT INTO DBA.hacfl04_work 
-            (batch_id, line_num, cucd, cocd, odsu, oddt, dldt, err_msg)
-            VALUES (?, ?, ?, ?, ?, ?, ?, '')
+            (batch_id, line_num, cucd, cocd, odsu, oddt, dldt, updt, err_msg)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, '')
         """
         
         insert_count = 0
         seen_keys = set()
         
-        for i, row in enumerate(rows, start=start_line_num):
+        # 1行目からデータとして処理
+        for i, row in enumerate(rows, start=1):
+            # 空行スキップ
+            if not row or all(c.strip() == '' for c in row):
+                continue
+
             if len(row) < 3: row += [''] * (3 - len(row))
             
             cucd_val = row[0].strip()
@@ -237,8 +235,8 @@ def parse_and_insert_work(file_storage, mode, user_id=None, fixed_oddt=None, fix
             odsu_str = row[2].strip()
             odsu_val = int(odsu_str) if odsu_str.isdigit() else 0
 
-            # ★CSVの4,5列目は無視し、画面から渡された変数を使う
-            params = [batch_id, i, cucd_val, cocd_val, odsu_val, fixed_oddt, fixed_dldt]
+            # ★ updt に today_date をセット
+            params = [batch_id, i, cucd_val, cocd_val, odsu_val, fixed_oddt, fixed_dldt, today_date]
             cursor.execute(sql, params)
             insert_count += 1
             
@@ -253,7 +251,7 @@ def parse_and_insert_work(file_storage, mode, user_id=None, fixed_oddt=None, fix
 
 
 def exec_db_validation(cursor, batch_id, mode):
-    """ SQLによる一括チェック (日付チェック修正) """
+    """ SQLによる一括チェック """
     
     now = get_db_server_time()
     today_str = now.strftime('%Y-%m-%d')
@@ -270,8 +268,7 @@ def exec_db_validation(cursor, batch_id, mode):
     cursor.execute("UPDATE DBA.hacfl04_work SET err_msg = err_msg || ' [店舗CDスペース不可]' WHERE batch_id = ? AND cucd LIKE '% %'", (batch_id,))
     cursor.execute("UPDATE DBA.hacfl04_work SET err_msg = err_msg || ' [発注数0]' WHERE batch_id = ? AND odsu = 0", (batch_id,))
 
-    # 3. 日付チェック (画面指定値に対するチェック)
-
+    # 3. 日付チェック
     # --- 納品日 (dldt) ---
     cursor.execute("""
         UPDATE DBA.hacfl04_work 
@@ -286,6 +283,7 @@ def exec_db_validation(cursor, batch_id, mode):
     """, (batch_id, limit_str))
 
     # --- 発注日 (oddt) ---
+    # oddtは NULL OK なので、IS NOT NULL の場合のみチェック
     cursor.execute("""
         UPDATE DBA.hacfl04_work 
         SET err_msg = err_msg || ' [発注日が過去]' 
@@ -299,7 +297,6 @@ def exec_db_validation(cursor, batch_id, mode):
     """, (batch_id, limit_str))
 
     # --- 矛盾チェック (発注日 < 納品日) ---
-    # 発注日と納品日が両方指定されている場合、発注日 >= 納品日 ならエラー
     cursor.execute("""
         UPDATE DBA.hacfl04_work 
         SET err_msg = err_msg || ' [納品日は発注日の翌日以降]' 
@@ -309,7 +306,7 @@ def exec_db_validation(cursor, batch_id, mode):
           AND oddt >= dldt
     """, (batch_id,))
     
-    # 朝締めモードなのに発注日が指定されていたらエラー（基本はロジックでNoneにするので発生しないはず）
+    # 朝締めモードなのに発注日が指定されていたらエラー（ロジックでNoneにするので基本発生しない）
     if mode == 'morning':
         cursor.execute("""
             UPDATE DBA.hacfl04_work 
@@ -366,7 +363,7 @@ def get_work_data_checked(batch_id, mode):
 
             data_list.append({
                 "line_num": line_num,
-                "cols": row[1:6],
+                "cols": row[1:6], # cucd, cocd, odsu, oddt, dldt
                 "item_name": row[7] if row[7] else "(-)", 
                 "kika":      row[8] if row[8] else "",    
                 "maker":     row[9] if row[9] else "",    
@@ -391,6 +388,7 @@ def migrate_work_to_main(batch_id, mode, user_id=None):
     modeを受け取り、INSERT先のテーブルを切り替える
     """
     # 1. 時間＆モードチェック (これでテーブル名も決まる)
+    # ★本登録ボタンを押した瞬間にも時間を再チェックする(タイムラグ対策)
     is_ok, msg, config = check_time_and_get_config(mode)
     if not is_ok: return False, msg, 0
 
@@ -404,11 +402,12 @@ def migrate_work_to_main(batch_id, mode, user_id=None):
         count_row = cursor.fetchone()
         row_count = count_row[0] if count_row else 0
         
-        # モードに応じたテーブル名 (hacflr or hacfl04)
+        if row_count == 0:
+            return False, "登録対象データがありません(タイムアウト等)", 0
+
         target_table = config['table']
         
         # マスタから部門を補完してINSERT
-        # ※朝も夜もカラム構成は同じ前提
         sql_copy = f"""
             INSERT INTO {target_table} 
             (edpno, type, cucd, cocd, bucd, odsu, oddt, dldt)
@@ -419,6 +418,8 @@ def migrate_work_to_main(batch_id, mode, user_id=None):
             WHERE w.batch_id = ?
         """
         cursor.execute(sql_copy, (batch_id,))
+        
+        # 登録後、ワークテーブルから削除
         cursor.execute("DELETE FROM DBA.hacfl04_work WHERE batch_id = ?", (batch_id,))
         conn.commit()
         
@@ -458,7 +459,7 @@ def get_product_info_by_cd(cocd):
         sql = """
             SELECT 
                 c3.hnam_k, c3.kika_k, c3.mnam_p, -- 0,1,2
-                c2.bucd, c2.irsu, c2.btan        -- 3,4,5
+                c2.bucd, c2.irsu, c2.btan        # 3,4,5
             FROM DBA.comf3 c3
             LEFT JOIN DBA.comf204 c2 ON c3.cocd = c2.cocd
             WHERE c3.cocd = ?

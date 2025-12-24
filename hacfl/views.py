@@ -22,9 +22,9 @@ from common.hacfl_db_logic import (
 # ---------------------------------------------------
 @hacfl_bp.route('/download_template')
 def download_template():
-    # 3列 (店舗CD, 商品CD, 発注数)
+    # ★修正: ヘッダー行を削除し、データのみにする
+    # ユーザーが列の意味を忘れないよう、HTML側に「列順序」の説明があるためこれでOKです
     csv_data = [
-        "店舗CD,商品CD,発注数",
         "111,12345678,10"
     ]
     csv_string = "\r\n".join(csv_data)
@@ -33,9 +33,9 @@ def download_template():
         csv_string.encode("cp932"), 
         mimetype="text/csv"
     )
-    response.headers["Content-Disposition"] = "attachment; filename=hacfl_template.csv"
+    # ファイル名も template より sample の方が実態に近いかもしれません
+    response.headers["Content-Disposition"] = "attachment; filename=hacfl_sample.csv"
     return response
-
 # ---------------------------------------------------
 # 2. トップ画面 (単発登録 & CSVアップロード)
 # ---------------------------------------------------

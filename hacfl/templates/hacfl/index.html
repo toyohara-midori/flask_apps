@@ -12,7 +12,7 @@
         }
 
         .container {
-            max-width: 800px; /* ★少し広げました */
+            max-width: 800px;
             margin: 0 auto;
             background: #fff;
             padding: 30px;
@@ -199,7 +199,7 @@
         }
 
         // ==========================================
-        //  1. モード切替時の全体制御 (★大幅修正)
+        //  1. モード切替時の全体制御
         // ==========================================
         async function updateMode() {
             const rbNormal = document.getElementById('rb_normal');
@@ -487,7 +487,7 @@
         // 初期化
         window.addEventListener('load', function() {
             setDateConstraints();
-            updateMode(); // これが初期ロード時に走り、全入力を無効化します
+            updateMode(); // 初期ロード時に全入力を無効化
         });
     </script>
 </head>
@@ -580,8 +580,11 @@
 
                 <div style="padding: 20px; background:#f8f9fa; border:2px dashed #ccc; text-align:center; margin-bottom:15px;">
                     <input type="file" name="csv_file" accept=".csv" required disabled>
-                    <p style="font-size:0.8em; color:#666; margin-top:5px;">
-                        ※フォーマット: 店舗CD, 商品CD, 発注数 (3列)
+                    <p style="font-size:0.9em; color:#d9534f; margin-top:10px; font-weight:bold;">
+                        ※1行目からデータとして読み込みます（ヘッダー行不要）
+                    </p>
+                    <p style="font-size:0.8em; color:#666;">
+                        列順序: 店舗CD, 商品CD, 発注数 (3列)
                     </p>
                 </div>
 
@@ -589,7 +592,7 @@
 
                 <div style="text-align:right; margin-top:10px;">
                     <a href="{{ url_for('hacfl.download_template') }}" style="font-size:0.9em; color:#007bff;">
-                        📥 雛形CSVダウンロード
+                        📥 入力サンプル（CSV）ダウンロード
                     </a>
                 </div>
             </form>

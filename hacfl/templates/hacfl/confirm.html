@@ -209,7 +209,7 @@
         function preventDoubleSubmit(form) {
             const btn = document.querySelector('.confirm-btn');
             if (btn) {
-                btn.disabled = true;       // ボタン無効化
+                btn.disabled = true;        // ボタン無効化
                 btn.innerText = "処理中..."; // 文言変更
                 btn.style.opacity = "0.6"; // 薄くする
                 btn.style.cursor = "not-allowed";
@@ -296,7 +296,12 @@
                     <td class="num-col" style="font-weight:bold;">{{ item.cols[2] }}</td>
 
                     <td class="date-col">
-                        {% if item.cols[3] %}{{ item.cols[3] }}{% else %}-{% endif %}
+                        {# ★ここを変更しました：日付がなければ「当日扱い」と表示 #}
+                        {% if item.cols[3] %}
+                        {{ item.cols[3] }}
+                        {% else %}
+                        <span style="color:#28a745; font-weight:bold;">当日扱い</span>
+                        {% endif %}
                     </td>
                     <td class="date-col">
                         {% if item.cols[4] %}{{ item.cols[4] }}{% else %}-{% endif %}
@@ -314,7 +319,6 @@
     </div>
 
     <div class="action-buttons">
-        {# ★ここを修正: hacfl.confirm へPOSTする。import_idは不要 #}
         <form method="POST" action="{{ url_for('hacfl.confirm') }}" onsubmit="return preventDoubleSubmit(this)" style="display: inline;">
 
             {% if has_error %}
@@ -327,7 +331,6 @@
         </form>
 
         <br>
-        {# ★ここを修正: hacfl.index へ戻る #}
         <a href="{{ url_for('hacfl.index') }}" class="back-btn">キャンセルして戻る</a>
     </div>
 
