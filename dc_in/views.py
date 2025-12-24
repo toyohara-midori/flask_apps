@@ -360,12 +360,20 @@ def voucher_detail(v_id):
 @bp.route('/edit_limits', methods=['GET', 'POST'])
 def edit_limits():
     message = None
+    # フォームまたはURLから日付を取得
     target_date_str = request.args.get('target_date') or request.form.get('target_date')
+    
+    # 今日の日付
+    today_str = datetime.date.today().strftime('%Y/%m/%d')
+
     if not target_date_str:
-        target_date_str = datetime.date.today().strftime('%Y/%m/%d')
+        target_date_str = today_str
+    else:
+        target_date_str = target_date_str.replace('-', '/')
     
     current_user_id = get_remote_user(request)
 
+    # --- POST処理（保存） ---
     if request.method == 'POST':
         s_val = request.form.get('s_limit', 0)
         m_val = request.form.get('m_limit', 0)
@@ -373,14 +381,42 @@ def edit_limits():
         try:
             db_logic.save_limits(target_date_str, s_val, m_val, scope)
             message = "設定を保存しました。"
-            # ★追加: 設定変更ログ
-            write_log('dc_in', current_user_id, 'UPDATE', f'上限数変更: {target_date_str} / 守谷:{s_val} 狭山:{m_val} ({scope})')
+            # 設定変更ログ
+            write_log('dc_in', current_user_id, 'UPDATE', f'上限数変更: {target_date_str} / 守谷:{m_val} 狭山:{s_val} ({scope})')
         except Exception as e:
             message = f"エラーが発生しました: {e}"
             write_log('dc_in', current_user_id, 'ERROR', f'上限数変更エラー: {e}')
 
+    # --- データ取得 ---
+    # 1. 選択された日の現在の上限値を取得（入力フォーム用）
     current = db_logic.get_limits_by_date(target_date_str)
-    monthly_list = db_logic.get_monthly_limits(datetime.date.today().strftime('%Y/%m/%d'))
+    
+    # 2. 向こう一ヶ月のリストを取得（ベースとなる予定数・上限数）
+    monthly_list = db_logic.get_monthly_limits(today_str)
+
+    # 3. ★追加: 出荷予定データを取得（今日以降）
+    ship_data_map = db_logic.get_shipment_data(today_str)
+
+    # 4. ★追加: monthly_list に出荷予定データをマージ（合体）する
+    for row in monthly_list:
+        d_key = row['date']  # 日付
+
+        if d_key in ship_data_map:
+            # データがある場合
+            row['m_reg_ship'] = ship_data_map[d_key].get('m_reg_ship', 0)
+            row['m_jv_ship']  = ship_data_map[d_key].get('m_jv_ship', 0)
+            row['s_reg_ship'] = ship_data_map[d_key].get('s_reg_ship', 0)
+            row['s_jv_ship']  = ship_data_map[d_key].get('s_jv_ship', 0)
+        else:
+            # データがない場合
+            row['m_reg_ship'] = 0
+            row['m_jv_ship']  = 0
+            row['s_reg_ship'] = 0
+            row['s_jv_ship']  = 0
+
+        # ★追加: ここで単純に足し算して「出庫合計」を作ります
+        row['m_total_ship'] = row['m_reg_ship'] + row['m_jv_ship']
+        row['s_total_ship'] = row['s_reg_ship'] + row['s_jv_ship']
 
     return render_template('dc_in/edit_limits.html', target_date=target_date_str, data=current, monthly_list=monthly_list, message=message)
 

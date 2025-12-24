@@ -11,7 +11,7 @@
         }
 
         .container {
-            max-width: 1100px;
+            max-width: 1400px;
             margin: auto;
             padding: 30px;
             background: white;
@@ -34,7 +34,18 @@
             margin-bottom: 15px;
         }
 
-        /* 日付選択 */
+        /* --- 数値入力の上下ボタンを消す --- */
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        /* 日付選択エリア */
         .date-selector {
             background-color: #eee;
             padding: 15px;
@@ -48,18 +59,52 @@
                 font-size: 16px;
                 width: 120px;
                 text-align: center;
+                background-color: #fff;
+                border: 1px solid #ccc;
             }
 
+        /* ロック中（入力不可）のスタイル */
+        .input-locked {
+            background-color: #e9ecef !important;
+            color: #6c757d;
+            border: 1px solid #ced4da;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
         .btn-search {
-            padding: 8px 15px;
+            padding: 8px 25px;
             background-color: #666;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            font-weight: bold;
         }
 
-        /* 入力フォームテーブル */
+        .btn-disabled {
+            background-color: #ccc !important;
+            cursor: not-allowed !important;
+            opacity: 0.6;
+        }
+
+        /* 解除ボタン（日付変更ボタン） */
+        .btn-unlock {
+            padding: 8px 15px;
+            background-color: #2980b9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+            display: none; /* 初期状態は非表示 */
+        }
+
+            .btn-unlock:hover {
+                background-color: #1f618d;
+            }
+
+        /* テーブル系スタイル */
         .input-table {
             width: 100%;
             border-collapse: collapse;
@@ -98,31 +143,54 @@
             border-radius: 4px;
         }
 
-        /* 更新範囲 */
+        /* 更新範囲ボタン */
         .scope-area {
             margin: 20px 0;
-            padding: 15px;
+            padding: 20px;
             background-color: #fff3e0;
             border: 1px solid #ffcc80;
-            border-radius: 5px;
+            border-radius: 8px;
             text-align: center;
         }
 
-        .scope-label {
+        .radio-input {
+            display: none;
+        }
+
+        .radio-btn-label {
+            display: inline-block;
+            margin: 0 10px;
+            padding: 15px 30px;
+            font-size: 1.3em;
             font-weight: bold;
-            margin-right: 20px;
+            color: #555;
+            background-color: #fff;
+            border: 2px solid #ccc;
+            border-radius: 30px;
             cursor: pointer;
-            font-size: 1.1em;
+            transition: all 0.2s ease;
+        }
+
+            .radio-btn-label:hover {
+                border-color: #d35400;
+                background-color: #fff8f0;
+            }
+
+        .radio-input:checked + .radio-btn-label {
+            background-color: #d35400;
+            color: #fff;
+            border-color: #d35400;
+            box-shadow: 0 4px 10px rgba(211, 84, 0, 0.4);
         }
 
         .scope-warning {
             display: block;
             color: #d35400;
             font-size: 0.9em;
-            margin-top: 5px;
+            margin-top: 15px;
+            font-weight: bold;
         }
 
-        /* 保存ボタン */
         .save-btn {
             width: 100%;
             padding: 15px;
@@ -134,26 +202,39 @@
             border-radius: 5px;
             cursor: pointer;
             transition: background 0.3s;
+            margin-top: 10px;
         }
 
             .save-btn:hover {
                 background-color: #a04000;
             }
 
-        /* 一覧リスト用テーブル */
+        /* 一覧リスト */
         .list-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.9em;
+            font-size: 0.85em;
         }
 
-            .list-table th, .list-table td {
+            .list-table th {
                 border: 1px solid #ccc;
-                padding: 6px;
+                padding: 8px;
                 text-align: center;
+                vertical-align: middle;
             }
 
-        /* リストヘッダー色 */
+            .list-table td {
+                border: 1px solid #ccc;
+                padding: 6px 15px 6px 0;
+                text-align: right;
+                vertical-align: middle;
+            }
+
+                .list-table td.date-col {
+                    text-align: center;
+                    padding-right: 6px;
+                }
+
         .lh-sayama {
             background-color: #d6eaf8;
             color: #2874a6;
@@ -168,24 +249,38 @@
             background-color: #f2f2f2;
         }
 
-        /* 上限数（設定値）列の強調（濃いめ） */
-        .limit-col {
-            font-weight: bold;
-            background-color: #e0e0e0; /* 濃いグレーに変更 */
-            color: #000;
-            border-left: 3px solid #666; /* 枠線を太く */
-            font-size: 1.1em;
-        }
-
-        /* 予定数列 */
-        .sched-col {
+        .num-col {
             color: #666;
         }
-        /* 合計予定列 (少し強調) */
-        .sched-total-col {
+
+        .total-col {
             font-weight: bold;
             color: #333;
             background-color: #fafafa;
+        }
+
+        .ship-col-m {
+            color: #d35400;
+            background-color: #fffaf0;
+        }
+
+        .ship-col-s {
+            color: #d35400;
+            background-color: #f4fbfd;
+        }
+
+        .ship-total-col {
+            font-weight: bold;
+            color: #d35400;
+            background-color: #ffe0b2;
+        }
+
+        .limit-col {
+            font-weight: bold;
+            background-color: #e0e0e0;
+            color: #000;
+            border-left: 2px solid #999;
+            font-size: 1.1em;
         }
 
         .dummy-link {
@@ -216,19 +311,23 @@
             text-decoration: none;
         }
 
-            .back-link:hover {
-                text-decoration: underline;
-            }
-        /* 日曜日用のスタイル */
         .sunday-row {
-            background-color: #ffe0e0; /* 薄い赤 */
-            color: #d8000c; /* 濃い赤文字 */
+            background-color: #ffe0e0 !important;
+            color: #d8000c !important;
             font-weight: bold;
         }
 
-            /* 入力欄がある場合、日曜日は入力欄の背景も少し赤くすると分かりやすい */
             .sunday-row input {
                 background-color: #fff0f0;
+            }
+
+            .sunday-row td.date-col, .sunday-row td.num-col, .sunday-row td.total-col,
+            .sunday-row td.ship-col-m, .sunday-row td.ship-col-s, .sunday-row td.limit-col {
+                background-color: #ffe0e0 !important;
+            }
+
+            .sunday-row td.ship-total-col {
+                background-color: #ef9a9a !important;
             }
     </style>
 
@@ -239,6 +338,87 @@
                 return confirm("【注意】\n指定日以降を全て、上記の値で上書き更新します。\nよろしいですか？");
             }
             return true;
+        }
+
+        // --- ★制御ロジック ---
+        document.addEventListener("DOMContentLoaded", function () {
+            // URLパラメータに target_date があるかチェック
+            const urlParams = new URLSearchParams(window.location.search);
+            const hasTargetDate = urlParams.has('target_date');
+
+            // 保存後のメッセージがある場合も「入力モード」とみなす
+            const hasMessage = document.querySelector('.message') !== null;
+
+            if (hasTargetDate || hasMessage) {
+                // 【入力モード】日付を指定して表示した後
+                setEditMode();
+            } else {
+                // 【初期状態】日付選択モード（デフォルト）
+                // HTML側で設定済みなので何もしない
+            }
+        });
+
+        // 入力モード（数値入力OK、日付ロック）に切り替え
+        function setEditMode() {
+            const dateInput = document.getElementById('target_date_input');
+            const searchBtn = document.getElementById('btn_search');
+            const changeBtn = document.getElementById('btn_change_date');
+            const limitInputs = document.querySelectorAll('.limit-input');
+            const saveBtn = document.getElementById('btn_save');
+
+            // 日付: ロック
+            dateInput.readOnly = true;
+            dateInput.classList.add('input-locked');
+
+            // 表示ボタン: 無効化（日付変えられないので）
+            searchBtn.disabled = true;
+            searchBtn.classList.add('btn-disabled');
+
+            // 日付変更ボタン: 表示
+            changeBtn.style.display = 'inline-block';
+
+            // 数値入力: 解除
+            limitInputs.forEach(input => {
+                input.readOnly = false;
+                input.classList.remove('input-locked');
+            });
+
+            // 保存ボタン: 有効化
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('btn-disabled');
+            saveBtn.textContent = "設定を保存する";
+        }
+
+        // 日付変更モードに戻す（「日付を変更する」ボタン押下時）
+        function setDateChangeMode() {
+            const dateInput = document.getElementById('target_date_input');
+            const searchBtn = document.getElementById('btn_search');
+            const changeBtn = document.getElementById('btn_change_date');
+            const limitInputs = document.querySelectorAll('.limit-input');
+            const saveBtn = document.getElementById('btn_save');
+
+            // 日付: 解除
+            dateInput.readOnly = false;
+            dateInput.classList.remove('input-locked');
+            dateInput.focus();
+
+            // 表示ボタン: 有効化
+            searchBtn.disabled = false;
+            searchBtn.classList.remove('btn-disabled');
+
+            // 日付変更ボタン: 隠す
+            changeBtn.style.display = 'none';
+
+            // 数値入力: ロック
+            limitInputs.forEach(input => {
+                input.readOnly = true;
+                input.classList.add('input-locked');
+            });
+
+            // 保存ボタン: 無効化
+            saveBtn.disabled = true;
+            saveBtn.classList.add('btn-disabled');
+            saveBtn.textContent = "日付を確定して「表示」を押してください";
         }
     </script>
 </head>
@@ -252,8 +432,11 @@
 
         <form method="GET" class="date-selector">
             <label>対象開始日: </label>
-            <input type="text" name="target_date" value="{{ target_date }}" placeholder="YYYY/MM/DD">
-            <button type="submit" class="btn-search">表示</button>
+            <input type="date" id="target_date_input" name="target_date" value="{{ target_date.replace('/', '-') }}">
+
+            <button type="submit" id="btn_search" class="btn-search">表示</button>
+
+            <button type="button" id="btn_change_date" class="btn-unlock" onclick="setDateChangeMode()">日付を変更する</button>
         </form>
 
         <form method="POST" onsubmit="return confirmUpdate();">
@@ -262,29 +445,29 @@
             <table class="input-table">
                 <thead>
                     <tr>
-                        <th class="header-sayama">狭山日高C 上限数</th>
                         <th class="header-moriya">守谷C 上限数</th>
+                        <th class="header-sayama">狭山日高C 上限数</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td><input type="number" name="s_limit" value="{{ data.s_limit }}" min="0"> cs</td>
-                        <td><input type="number" name="m_limit" value="{{ data.m_limit }}" min="0"> cs</td>
+                        <td><input type="number" name="m_limit" value="{{ data.m_limit }}" min="0" class="limit-input input-locked" readonly> cs</td>
+                        <td><input type="number" name="s_limit" value="{{ data.s_limit }}" min="0" class="limit-input input-locked" readonly> cs</td>
                     </tr>
                 </tbody>
             </table>
 
             <div class="scope-area">
-                <label class="scope-label">
-                    <input type="radio" name="update_scope" value="single" checked> この日だけ更新
-                </label>
-                <label class="scope-label">
-                    <input type="radio" name="update_scope" value="bulk" id="scope_bulk"> この日以降全て
-                </label>
+                <input type="radio" id="scope_single" name="update_scope" value="single" class="radio-input" checked>
+                <label for="scope_single" class="radio-btn-label">この日だけ更新</label>
+
+                <input type="radio" id="scope_bulk" name="update_scope" value="bulk" class="radio-input">
+                <label for="scope_bulk" class="radio-btn-label">この日以降全て</label>
+
                 <span class="scope-warning">※「この日以降全て」を選ぶと、指定日以降の日付が全て上書きされます。</span>
             </div>
 
-            <button type="submit" class="save-btn">設定を保存する</button>
+            <button type="submit" id="btn_save" class="save-btn btn-disabled" disabled>日付を確定して「表示」を押してください</button>
         </form>
 
         <h2>向こう一ヶ月の設定状況</h2>
@@ -292,39 +475,50 @@
             <thead>
                 <tr>
                     <th rowspan="2" class="lh-base">日付</th>
-                    <th colspan="4" class="lh-sayama">狭山日高C</th>
-                    <th colspan="4" class="lh-moriya">守谷C</th>
+                    <th colspan="7" class="lh-moriya">守谷C</th>
+                    <th colspan="7" class="lh-sayama">狭山日高C</th>
                 </tr>
                 <tr>
-                    <th class="lh-sayama">JV予定</th>
-                    <th class="lh-sayama">定番予定</th>
-                    <th class="lh-sayama">予定合計</th>
-                    <th class="lh-sayama" style="border-left: 3px solid #666;">上限設定</th>
-
-                    <th class="lh-moriya">JV予定</th>
-                    <th class="lh-moriya">定番予定</th>
-                    <th class="lh-moriya">予定合計</th>
+                    <th class="lh-moriya">定番入庫</th>
+                    <th class="lh-moriya">JV入庫</th>
+                    <th class="lh-moriya">入庫合計</th>
+                    <th class="lh-moriya" style="background-color: #fcf3cf;">定番出荷</th>
+                    <th class="lh-moriya" style="background-color: #fcf3cf;">JV出荷</th>
+                    <th class="lh-moriya" style="background-color: #ffe0b2;">出庫合計</th>
                     <th class="lh-moriya" style="border-left: 3px solid #666;">上限設定</th>
+
+                    <th class="lh-sayama">定番入庫</th>
+                    <th class="lh-sayama">JV入庫</th>
+                    <th class="lh-sayama">入庫合計</th>
+                    <th class="lh-sayama" style="background-color: #ebf5fb;">定番出荷</th>
+                    <th class="lh-sayama" style="background-color: #ebf5fb;">JV出荷</th>
+                    <th class="lh-sayama" style="background-color: #ffe0b2;">出庫合計</th>
+                    <th class="lh-sayama" style="border-left: 3px solid #666;">上限設定</th>
                 </tr>
             </thead>
             <tbody>
                 {% for row in monthly_list %}
                 <tr class="{% if row.is_sunday %}sunday-row{% endif %}">
-                    <td>
+                    <td class="date-col">
                         <span class="dummy-link" onclick="location.href='{{ url_for('dc_in.edit_limits') }}?target_date={{ row.date }}'">
                             {{ row.date }}
                         </span>
                     </td>
+                    <td class="num-col">{{ "{:,}".format(row.m_reg_sched) }}</td>
+                    <td class="num-col">{{ "{:,}".format(row.m_jv_sched) }}</td>
+                    <td class="total-col">{{ "{:,}".format(row.m_total_sched) }}</td>
+                    <td class="ship-col-m">{% if row.m_reg_ship is defined %}{{ "{:,}".format(row.m_reg_ship) }}{% else %}-{% endif %}</td>
+                    <td class="ship-col-m">{% if row.m_jv_ship is defined %}{{ "{:,}".format(row.m_jv_ship) }}{% else %}-{% endif %}</td>
+                    <td class="ship-total-col">{% if row.m_total_ship is defined %}{{ "{:,}".format(row.m_total_ship) }}{% else %}-{% endif %}</td>
+                    <td class="limit-col">{{ "{:,}".format(row.m_limit) }}</td>
 
-                    <td class="sched-col">{{ row.s_jv_sched }}</td>
-                    <td class="sched-col">{{ row.s_reg_sched }}</td>
-                    <td class="sched-total-col">{{ row.s_total_sched }}</td>
-                    <td class="limit-col">{{ row.s_limit }}</td>
-
-                    <td class="sched-col">{{ row.m_jv_sched }}</td>
-                    <td class="sched-col">{{ row.m_reg_sched }}</td>
-                    <td class="sched-total-col">{{ row.m_total_sched }}</td>
-                    <td class="limit-col">{{ row.m_limit }}</td>
+                    <td class="num-col">{{ "{:,}".format(row.s_reg_sched) }}</td>
+                    <td class="num-col">{{ "{:,}".format(row.s_jv_sched) }}</td>
+                    <td class="total-col">{{ "{:,}".format(row.s_total_sched) }}</td>
+                    <td class="ship-col-s">{% if row.s_reg_ship is defined %}{{ "{:,}".format(row.s_reg_ship) }}{% else %}-{% endif %}</td>
+                    <td class="ship-col-s">{% if row.s_jv_ship is defined %}{{ "{:,}".format(row.s_jv_ship) }}{% else %}-{% endif %}</td>
+                    <td class="ship-total-col">{% if row.s_total_ship is defined %}{{ "{:,}".format(row.s_total_ship) }}{% else %}-{% endif %}</td>
+                    <td class="limit-col">{{ "{:,}".format(row.s_limit) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

@@ -1616,3 +1616,86 @@ def get_monthly_limits(start_date_str):
     finally:
         cursor.close()
         conn.close()
+        # ※ import文 (from sqlalchemy import text) は不要です。削除してください。
+
+# ==========================================
+# 7. 出荷予定取得ロジック (シンプル結合版)
+# ==========================================
+def get_shipment_data(start_date):
+    """
+    指定日以降の出荷予定を、定番・JV別に集計して返す。
+    商品コードでCOMF204を結合し、入数(irsu)でケース換算する。
+    """
+    conn = get_connection('master')
+    cursor = conn.cursor()
+    
+    try:
+        centers = [
+            {'prefix': 's', 'table': 'DCSHAC'},  # 狭山日高
+            {'prefix': 'm', 'table': 'DCYHAC'}   # 守谷
+        ]
+        
+        ship_data = {}
+
+        for center in centers:
+            # SQL構築
+            # 余計なサブクエリを削除し、cocdだけでシンプルに結合します
+            sql = f"""
+                SELECT 
+                    T.dldt,
+                    
+                    -- JVのケース数集計
+                    SUM(CASE 
+                        WHEN SUBSTRING(M1.mnam, 1, 2) = 'JV' THEN 
+                            (CASE 
+                                WHEN M2.irsu IS NULL OR M2.irsu = 0 THEN T.odsu 
+                                ELSE CAST(T.odsu AS NUMERIC) / M2.irsu 
+                            END)
+                        ELSE 0 
+                    END) AS jv_cases,
+                    
+                    -- 定番のケース数集計
+                    SUM(CASE 
+                        WHEN SUBSTRING(M1.mnam, 1, 2) = 'JV' THEN 0 
+                        ELSE 
+                            (CASE 
+                                WHEN M2.irsu IS NULL OR M2.irsu = 0 THEN T.odsu 
+                                ELSE CAST(T.odsu AS NUMERIC) / M2.irsu 
+                            END)
+                    END) AS reg_cases
+
+                FROM {center['table']} T
+                LEFT JOIN COMF1 M1 
+                       ON T.cocd = M1.cocd
+                LEFT JOIN COMF204 M2 
+                       ON T.cocd = M2.cocd -- 商品コードのみで結合
+
+                WHERE T.dldt >= '{start_date}'
+                GROUP BY T.dldt
+            """
+
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+
+            for row in rows:
+                d_val = row[0]
+                jv_val = row[1]
+                reg_val = row[2]
+
+                if isinstance(d_val, (datetime.date, datetime.datetime)):
+                    d_str = d_val.strftime('%Y/%m/%d')
+                else:
+                    d_str = str(d_val).replace('-', '/')
+                
+                if d_str not in ship_data:
+                    ship_data[d_str] = {}
+
+                # 整数(int)として格納
+                ship_data[d_str][f"{center['prefix']}_jv_ship"] = int(jv_val or 0)
+                ship_data[d_str][f"{center['prefix']}_reg_ship"] = int(reg_val or 0)
+
+        return ship_data
+
+    finally:
+        cursor.close()
+        conn.close()
