@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>DC入庫発注データ照会</title>
+    <style>
+        /* === CSS定義 (変更なし) === */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 50px;
+        }
+
+        .container {
+            max-width: 95vw;
+            margin: auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #ff8c00;
+        }
+
+        p {
+            margin-bottom: 20px;
+        }
+
+        /* センター別の大きな枠 */
+        .center-group-section {
+            border: 2px solid #ff8c00;
+            padding: 15px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            background-color: #fffaf0;
+        }
+
+        .center-group-header {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #ff8c00;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            border-bottom: 3px double #ff8c00;
+        }
+
+        /* ベンダー・納品日グループのスタイル */
+        .group-header {
+            background-color: #f0f0ff;
+            font-weight: bold;
+            padding: 10px 5px;
+            margin-top: 15px;
+            border-bottom: 2px solid #ccc;
+            display: flex;
+            gap: 20px;
+        }
+
+        /* 納品日による大きな区切り */
+        .separator {
+            height: 15px;
+        }
+
+        /* 詳細テーブルの設定 */
+        .detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            margin-top: 5px;
+        }
+
+            .detail-table th {
+                background-color: #e9ecef;
+                color: #333;
+                font-weight: bold;
+                border: 1px solid #ddd;
+                padding: 10px;
+                text-align: center;
+                font-size: 0.8em;
+                white-space: nowrap;
+            }
+
+            .detail-table td, .detail-table th {
+                font-size: 0.9em;
+                border: 1px solid #ddd;
+                padding: 10px;
+            }
+
+            .detail-table tr:nth-child(even) {
+                background-color: #f2f2f2;
+            }
+
+            /* 列幅設定 */
+            .detail-table td:nth-child(1), .detail-table th:nth-child(1) {
+                text-align: left;
+                width: 4.5%;
+            }
+
+            .detail-table td:nth-child(2), .detail-table th:nth-child(2) {
+                text-align: left;
+                width: 5.5%;
+            }
+
+            .detail-table td:nth-child(3), .detail-table th:nth-child(3) {
+                text-align: left;
+                width: 10.5%;
+                white-space: normal;
+                word-break: break-all;
+            }
+
+            .detail-table td:nth-child(4), .detail-table th:nth-child(4) {
+                text-align: left;
+                width: 5.0%;
+            }
+
+            .detail-table td:nth-child(5), .detail-table th:nth-child(5) {
+                text-align: left;
+                width: 5.0%;
+            }
+
+            .detail-table td:nth-child(n+6) {
+                text-align: right;
+                min-width: 35px;
+                white-space: nowrap;
+            }
+
+            .detail-table th:nth-child(6), .detail-table td:nth-child(6) {
+                width: 6.5%;
+            }
+
+            .detail-table th:nth-child(7), .detail-table td:nth-child(7) {
+                width: 6.5%;
+            }
+
+            .detail-table th:nth-child(8), .detail-table td:nth-child(8) {
+                width: 6.5%;
+            }
+
+            .detail-table th:nth-child(9), .detail-table td:nth-child(9) {
+                width: 6.5%;
+            }
+
+            .detail-table th:nth-child(10), .detail-table td:nth-child(10) {
+                width: 6.5%;
+            }
+
+            .detail-table th:nth-child(11), .detail-table td:nth-child(11) {
+                width: 8.5%;
+            }
+
+            .detail-table th:nth-child(12), .detail-table td:nth-child(12) {
+                width: 6.5%;
+            }
+
+        /* ボタンエリア */
+        .action-buttons {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+            .action-buttons button, .action-buttons a {
+                padding: 10px 20px;
+                font-size: 16px;
+                cursor: pointer;
+                margin: 0 10px;
+                border: none;
+                border-radius: 5px;
+                text-decoration: none;
+                display: inline-block;
+            }
+
+        .confirm-btn {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .back-btn {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        /* 全体集計リスト */
+        .summary-list-table {
+            width: 70%;
+            margin: 20px auto;
+            border-collapse: collapse;
+            font-size: 2.0em;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+            .summary-list-table th, .summary-list-table td {
+                border: 1px solid #ccc;
+                padding: 8px;
+                text-align: center;
+            }
+
+            .summary-list-table th {
+                background-color: #ffddb3;
+                color: #333;
+                font-weight: bold;
+            }
+
+            .summary-list-table td:nth-child(3),
+            .summary-list-table td:nth-child(4) {
+                font-weight: bold;
+                text-align: right;
+                background-color: #fff8f0;
+            }
+
+            .summary-list-table tr:hover {
+                background-color: #ffe8d0;
+            }
+
+        .summary-row {
+            padding: 5px;
+            background-color: #f0fff0;
+            border-top: 1px solid #ddd;
+            border-bottom: 2px solid #28a745;
+            margin-top: 5px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DC入庫発注データ照会</h1>
+
+        <p>
+            以下の内容でデータベースにデータを登録します。よろしければ**『登録を実行』ボタン**を押してください。
+        </p>
+
+        {# --- 詳細データの表示 --- #}
+        <div>
+            {% set current_delivery_date = "" %}
+
+            {% for center_name, groups in center_groups.items() %}
+            <div class="center-group-section">
+                <div class="center-group-header"><strong>{{ center_name }}</strong></div>
+
+                {% set current_delivery_date = "" %}
+
+                {% for group in groups %}
+
+                {% if group.delivery_date != current_delivery_date %}
+                {% if current_delivery_date != "" %}
+                <div class="separator"></div>
+                {% endif %}
+                {% endif %}
+
+                <div class="group-header">
+                    <span class="group-item">🚚 <strong>({{ group.vendor_code }}) {{ group.vendor_name }}</strong></span>
+                    <span class="group-item">📅 <strong>{{ group.delivery_date }}</strong></span>
+                </div>
+
+                {# ケース数集計 #}
+                {% set total_cases = namespace(all=0, jv=0, other=0) %}
+                {% for detail_row in group.details %}
+                {% set case_count = detail_row[6]|int %}
+                {% set total_cases.all = total_cases.all + case_count %}
+                {% set manufacturer_name = detail_row[4]|string|upper|trim %}
+                {% if manufacturer_name[:2] == 'JV' %}
+                {% set total_cases.jv = total_cases.jv + case_count %}
+                {% else %}
+                {% set total_cases.other = total_cases.other + case_count %}
+                {% endif %}
+                {% endfor %}
+
+                <div style="font-weight: bold; padding: 5px; background-color: #eee; display: flex; justify-content: space-between;">
+                    <span>部門: ({{ group.dept_code }}) {{ group.dept_name }}</span>
+                    <span>📦 合計ケース数: {{ "{:,}".format(total_cases.all) }}</span>
+                </div>
+
+                <div class="summary-row">
+                    <span></span>
+                    <span>
+                        {# ★変更: 左に定番、右にJV。カンマ区切り追加 #}
+                        <strong>定番ケース</strong>: <span style="color: #5bc0de;">{{ "{:,}".format(total_cases.other) }}</span> ケース
+                        &nbsp;|&nbsp;
+                        <strong>JVケース</strong>: <span style="color: #d9534f;">{{ "{:,}".format(total_cases.jv) }}</span> ケース
+                    </span>
+                </div>
+
+                <table class="detail-table">
+                    <thead>
+                        <tr>
+                            <th>商品コード</th>
+                            <th>JANCD</th>
+                            <th>商品名</th>
+                            <th>規格</th>
+                            <th>メーカー名</th>
+                            <th>納品数</th>
+                            <th>納品ケース数</th>
+                            <th>本部費(MD)</th>
+                            <th>物流費(DC)</th>
+                            <th>原単価</th>
+                            <th>合計原価</th>
+                            <th>値引き金額</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for detail_row in group.details %}
+                        <tr>
+                            <td>{{ detail_row[0] }}</td>
+                            <td>{{ detail_row[1] }}</td>
+                            <td>{{ detail_row[2] }}</td>
+                            <td>{{ detail_row[3] }}</td>
+                            <td>{{ detail_row[4] }}</td>
+                            {# ★変更: カンマ区切りを追加 #}
+                            <td>{{ "{:,}".format(detail_row[5]|int) }}</td>
+                            <td>{{ "{:,}".format(detail_row[6]|int) }}</td>
+                            <td>{{ detail_row[7] }}</td>
+                            <td>{{ detail_row[8] }}</td>
+                            {# ★変更: 原単価をカンマ区切り（金額らしく小数点2桁表示） #}
+                            <td>{{ "{:,.2f}".format(detail_row[9]|float) }}</td>
+                            <td>{{ detail_row[10] }}</td>
+                            {# ★変更: 値引金額をカンマ区切り #}
+                            <td>{{ "{:,}".format(detail_row[11]|float|int) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% set current_delivery_date = group.delivery_date %}
+                {% endfor %}
+            </div>
+            {% endfor %}
+
+        </div>
+
+        {# 全体集計リスト #}
+        <div id="list-add-placeholder">
+            <h3>📈 全体集計リスト (センター・納品日別)</h3>
+            <table class="summary-list-table">
+                <thead>
+                    <tr>
+                        <th>センター名</th>
+                        <th>納品日</th>
+                        {# ★変更: 左に定番、右にJV #}
+                        <th>定番ケース</th>
+                        <th>JVケース</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for summary in global_summary %}
+                    <tr>
+                        <td>{{ summary.center }}</td>
+                        <td>{{ summary.date }}</td>
+                        {# ★変更: 左に定番、右にJV。カンマ区切り追加 #}
+                        <td style="color: #5bc0de;">{{ "{:,}".format(summary.other) }}</td>
+                        <td style="color: #d9534f;">{{ "{:,}".format(summary.jv) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="action-buttons">
+            <form method="POST" action="{{ url_for('dc_in.complete_insertion') }}" style="display: inline;">
+                <input type="hidden" name="import_id" value="{{ import_id }}">
+
+                <button type="submit" class="confirm-btn">登録を実行</button>
+            </form>
+
+            <a href="{{ url_for('dc_in.home') }}" class="back-btn">キャンセルして戻る</a>
+        </div>
+    </div>
+</body>
+</html>

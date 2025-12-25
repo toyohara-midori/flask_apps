@@ -1,157 +1,48 @@
-"""朝締め処理用一括CSV登録"""
-__author__ = "藤波英一郎"
-__version__ = "1.0.00 20251203"
+from flask import Blueprint, request, abort, render_template_string
+from common.db_check_util import is_db_available, MAINTENANCE_HTML
+from common.auth_util import get_remote_user
+from common.ad_tool import check_permission_via_command, create_access_denied_html
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, Response
-
-# ロジックのインポート
-from common.hacfl_db_logic import (
-    parse_and_insert_work, 
-    get_work_data_checked, 
-    migrate_work_to_main
-)
-from common.ad_tool import is_user_in_group
-
-
+# Blueprint定義
 hacfl_bp = Blueprint(
-    'hacfl', 
-    __name__, 
+    'hacfl',
+    __name__,
     template_folder='templates',
-    static_folder='static',
-    static_url_path='/hacfl/static'
+    url_prefix='/hacfl'  # URLプレフィックスを明確化
 )
-#AD連携用
+
 @hacfl_bp.before_request
-def check_hacfl_permission():
-    user = request.remote_user
-    if not user: abort(401)
+def before_request_handler():
+    # 1. 静的ファイルはスルー
+    if request.endpoint and 'static' in request.endpoint:
+        return
 
-    # ★許可したいグループをリスト（[]）でたくさん書く
+    # 2. DB接続チェック
+    if not is_db_available():
+        return render_template_string(MAINTENANCE_HTML), 503
 
+    # 3. ユーザー特定 (IIS認証等)
+    user = get_remote_user(request)
+    if not user:
+        abort(401)
+
+    # 4. ADグループ権限チェック (net userコマンド版)
+    # ★この機能を利用できるグループを定義
     allowed_groups = [
         'Domain Admins',
-        'G-情報システム',
-        'G-商品部',
-        'G-商品部ディストリビューター'
+        'G-商品部ディストリビューター',
+        'G-商品部バイヤー',
+        'G-システム管理部'
     ]
-    # --- 判定ロジック ---
-    # 「フラグ」を用意する（最初は 通行止め=False にしておく）
-    has_permission = False
-
-    # リストのグループを1つずつ順番に試す
-    for group in allowed_groups:
-        if is_user_in_group(user, group):
-            # もし入っていたら、フラグを OK=True にして、ループを抜ける
-            has_permission = True
-            break
     
-    # 全部チェックし終わって、それでも False のままなら拒否
-    if not has_permission:
-        abort(403, description="ドメインでアクセスを許可されていません")
+    # 権限チェック実行 (common.ad_tool)
+    if check_permission_via_command(user, allowed_groups):
+        # OK: 処理続行
+        pass
+    else:
+        # NG: エラー画面を返却して中断
+        display_name = user.split('\\')[1] if '\\' in user else user
+        return create_access_denied_html(display_name)
 
-# ---------------------------------------------------
-# 1. テンプレートCSVダウンロード機能
-# ---------------------------------------------------
-@hacfl_bp.route('/download_template')
-def download_template():
-    # 5項目用のCSVデータ (ヘッダー + サンプル1行)
-    csv_data = [
-        "店舗CD,商品CD,発注数,発注日(任意),納品日(任意)",
-        "111,12345678,10,,"
-    ]
-    # 改行コードで結合
-    csv_string = "\r\n".join(csv_data)
-
-    # レスポンス作成 (Excel用にShift-JISでエンコード)
-    response = Response(
-        csv_string.encode("cp932"), 
-        mimetype="text/csv"
-    )
-    # ファイル名指定
-    response.headers["Content-Disposition"] = "attachment; filename=hacfl_template.csv"
-    
-    return response
-
-
-# ---------------------------------------------------
-# 2. アップロード画面 (TOP)
-# ---------------------------------------------------
-@hacfl_bp.route('/', methods=['GET', 'POST'])
-def index():
-    msg = ""
-    error = ""
-    
-    # 画面を開いたときはセッション(前の情報)をクリアしておく
-    if request.method == 'GET':
-        session.pop('hacfl_batch_id', None)
-
-    if request.method == 'POST':
-        # ファイルチェック
-        if 'csv_file' not in request.files:
-            error = "ファイルが送信されていません。"
-        else:
-            file = request.files['csv_file']
-            
-            # ロジック呼び出し (CSV読込 -> ワーク登録)
-            success, message, batch_id = parse_and_insert_work(file)
-            
-            if success:
-                # 成功したら batch_id をセッションに保存して確認画面へ
-                session['hacfl_batch_id'] = batch_id
-                return redirect(url_for('hacfl.confirm'))
-            else:
-                # 失敗 (サイズオーバー、拡張子エラーなど)
-                error = message
-
-    return render_template('hacfl/index.html', msg=msg, error=error)
-
-
-# ---------------------------------------------------
-# 3. 確認画面 (CSVの中身とエラーを表示)
-# ---------------------------------------------------
-@hacfl_bp.route('/confirm', methods=['GET', 'POST'])
-def confirm():
-    batch_id = session.get('hacfl_batch_id')
-    if not batch_id:
-        return redirect(url_for('hacfl.index'))
-
-    msg = ""
-    error = ""
-
-    # --- 登録ボタンが押された場合 (POST) ---
-    if request.method == 'POST':
-        # ★変更: 戻り値で count も受け取る
-        success, message, count = migrate_work_to_main(batch_id)
-        
-        if success:
-            session.pop('hacfl_batch_id', None)
-            
-            # ★追加: 完了画面で表示するために件数をセッションに一時保存
-            session['hacfl_reg_count'] = count
-            
-            return redirect(url_for('hacfl.complete'))
-        else:
-            error = message
-
-    # (GET時の処理はそのまま)
-    has_error, data_list = get_work_data_checked(batch_id)
-    
-    return render_template(
-        'hacfl/confirm.html', 
-        data_list=data_list, 
-        has_error=has_error,
-        error_msg=error
-    )
-
-
-
-# ---------------------------------------------------
-# 4. 完了画面
-# ---------------------------------------------------
-@hacfl_bp.route('/complete')
-def complete():
-    # ★追加: セッションから件数を取得（取得後は削除してゴミを残さない）
-    count = session.pop('hacfl_reg_count', 0)
-    
-    return render_template('hacfl/complete.html', count=count)
-# hacfl/__init__.py の末尾に追加
+# Viewのインポート（循環参照回避のため末尾）
+from . import views

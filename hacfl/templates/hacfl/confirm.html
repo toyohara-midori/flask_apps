@@ -35,10 +35,10 @@
             border: 1px solid #bee5eb;
         }
 
-        /* ★変更: テーブルエリアの高さを固定し、スクロール可能にする */
+        /* テーブルエリアの高さを固定し、スクロール可能にする */
         .table-container {
-            max-height: 600px; /* ここで高さを制限 */
-            overflow-y: auto; /* 縦スクロールを許可 */
+            max-height: 600px;
+            overflow-y: auto;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             background-color: #fff;
             border: 1px solid #ccc;
@@ -51,7 +51,7 @@
             font-size: 0.9em;
         }
 
-        /* ★重要: ヘッダーを固定する設定 */
+        /* ヘッダーを固定する設定 */
         th {
             background-color: #343a40;
             color: #fff;
@@ -59,8 +59,8 @@
             text-align: center;
             white-space: nowrap;
             position: sticky;
-            top: 0; /* 上に張り付く */
-            z-index: 10; /* データより手前に表示 */
+            top: 0;
+            z-index: 10;
             border: 1px solid #454d55;
         }
 
@@ -120,7 +120,13 @@
             gap: 15px;
         }
 
-        button {
+        /* ボタンデザインの修正 */
+        .action-buttons {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .confirm-btn {
             padding: 12px 0;
             width: 250px;
             font-size: 1.1em;
@@ -128,27 +134,29 @@
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
-        }
-
-        .btn-secondary {
-            background-color: #6c757d;
-            color: white;
-        }
-
-        .btn-primary {
             background-color: #007bff;
             color: white;
+            transition: 0.3s;
         }
 
-        .btn-secondary:hover {
-            background-color: #5a6268;
+            .confirm-btn:hover {
+                background-color: #0069d9;
+            }
+
+        .back-btn {
+            display: inline-block;
+            margin-top: 15px;
+            color: #6c757d;
+            text-decoration: none;
+            font-weight: bold;
         }
 
-        .btn-primary:hover {
-            background-color: #0069d9;
-        }
+            .back-btn:hover {
+                color: #5a6268;
+                text-decoration: underline;
+            }
 
-        /* コントロールエリア (件数表示など) */
+        /* コントロールエリア */
         .controls {
             display: flex;
             justify-content: space-between;
@@ -186,22 +194,36 @@
 
             rows.forEach(row => {
                 if (showOnlyError) {
-                    // エラークラスを持っていない行は隠す
                     if (!row.classList.contains('row-error')) {
                         row.style.display = 'none';
                     } else {
                         row.style.display = '';
                     }
                 } else {
-                    // 全表示
                     row.style.display = '';
                 }
             });
+        }
+
+        // 二重送信防止用
+        function preventDoubleSubmit(form) {
+            const btn = document.querySelector('.confirm-btn');
+            if (btn) {
+                btn.disabled = true;        // ボタン無効化
+                btn.innerText = "処理中..."; // 文言変更
+                btn.style.opacity = "0.6"; // 薄くする
+                btn.style.cursor = "not-allowed";
+            }
+            return true; // 送信続行
         }
     </script>
 </head>
 <body>
     <h2>登録内容チェック</h2>
+
+    <div style="background: {{ '#dc3545' if mode == 'morning' else '#007bff' }}; color: #fff; padding: 10px 20px; border-radius: 30px; margin-bottom: 20px; display: inline-block; font-weight: bold; font-size: 1.1em; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+        対象業務：{{ mode_name }}
+    </div>
 
     {% if error_msg %}
     <div class="alert alert-danger">{{ error_msg }}</div>
@@ -274,7 +296,12 @@
                     <td class="num-col" style="font-weight:bold;">{{ item.cols[2] }}</td>
 
                     <td class="date-col">
-                        {% if item.cols[3] %}{{ item.cols[3] }}{% else %}-{% endif %}
+                        {# ★ここを変更しました：日付がなければ「当日扱い」と表示 #}
+                        {% if item.cols[3] %}
+                        {{ item.cols[3] }}
+                        {% else %}
+                        <span style="color:#28a745; font-weight:bold;">当日扱い</span>
+                        {% endif %}
                     </td>
                     <td class="date-col">
                         {% if item.cols[4] %}{{ item.cols[4] }}{% else %}-{% endif %}
@@ -291,16 +318,20 @@
         </table>
     </div>
 
-    <div class="actions">
-        {% if not has_error %}
-        <form method="post">
-            <button type="submit" class="btn-primary">確定して登録</button>
-        </form>
-        {% endif %}
+    <div class="action-buttons">
+        <form method="POST" action="{{ url_for('hacfl.confirm') }}" onsubmit="return preventDoubleSubmit(this)" style="display: inline;">
 
-        <a href="{{ url_for('hacfl.index') }}">
-            <button type="button" class="btn-secondary">CSV登録に戻る</button>
-        </a>
+            {% if has_error %}
+            <button type="button" class="confirm-btn" style="background-color:#ccc; cursor:not-allowed;" disabled>
+                エラーがあるため登録できません
+            </button>
+            {% else %}
+            <button type="submit" class="confirm-btn">登録を実行</button>
+            {% endif %}
+        </form>
+
+        <br>
+        <a href="{{ url_for('hacfl.index') }}" class="back-btn">キャンセルして戻る</a>
     </div>
 
 </body>

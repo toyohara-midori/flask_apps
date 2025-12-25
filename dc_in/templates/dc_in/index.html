@@ -1,0 +1,371 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DC入庫発注データアップロード</title>
+    <style>
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            margin: 40px;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: auto;
+            padding: 40px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: relative; /* オーバーレイの基準 */
+            z-index: 1;
+        }
+
+        h1 {
+            text-align: center;
+            color: #0056b3;
+            margin-bottom: 30px;
+        }
+
+        /* --- エラー・メッセージ表示 --- */
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+        }
+
+        .alert-danger {
+            color: #721c24;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .alert-info {
+            color: #0c5460;
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+
+        /* --- フォームエリア --- */
+        .upload-area {
+            background-color: #f0f8ff;
+            border: 2px dashed #007bff;
+            padding: 40px 20px; /* 少し広げました */
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            transition: background-color 0.3s;
+        }
+
+        /* ファイル入力（非表示にしてラベルで操作させるデザインも一般的ですが、今回は既存維持しつつ微調整） */
+        input[type="file"] {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 80%;
+        }
+
+        input[type="submit"] {
+            padding: 12px 40px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background 0.3s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+            input[type="submit"]:hover {
+                background-color: #0056b3;
+                transform: translateY(-1px);
+            }
+
+            input[type="submit"]:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+                transform: none;
+            }
+
+        /* --- 区切り線 --- */
+        .separator {
+            border: 0;
+            height: 1px;
+            background: #ddd;
+            margin: 30px 0;
+        }
+
+        /* --- メニューリンク --- */
+        .menu-section {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .nav-card {
+            flex: 1;
+            min-width: 250px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            text-align: center;
+            background-color: #fff;
+            transition: 0.3s;
+        }
+
+            .nav-card:hover {
+                background-color: #fcfcfc;
+                border-color: #bbb;
+            }
+
+        .nav-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: block;
+            color: #555;
+            font-size: 13px;
+        }
+
+        .nav-btn {
+            display: inline-block;
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background-color: #e9ecef;
+            transition: 0.2s;
+            width: 80%;
+        }
+
+            .nav-btn:hover {
+                background-color: #dee2e6;
+            }
+
+        /* 管理者用強調 */
+        .admin-card {
+            border-color: #f5c6cb;
+            background-color: #fff5f5;
+        }
+
+            .admin-card:hover {
+                background-color: #ffebeb;
+            }
+
+        .admin-title {
+            color: #d35400;
+        }
+
+        .admin-btn {
+            color: #d35400;
+            background-color: #fff;
+            border: 1px solid #d35400;
+        }
+
+            .admin-btn:hover {
+                background-color: #d35400;
+                color: #fff;
+            }
+
+        /* ★追加: 画面全体ドロップゾーン用のオーバーレイ */
+        #drop-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 123, 255, 0.85); /* 青っぽく透過 */
+            z-index: 9999;
+            display: none; /* デフォルト非表示 */
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: white;
+            font-size: 2em;
+            font-weight: bold;
+            border: 10px dashed white;
+            box-sizing: border-box;
+        }
+
+            #drop-overlay p {
+                margin: 0;
+                font-size: 0.5em;
+                margin-top: 10px;
+            }
+    </style>
+    <script>
+        // 送信時のチェック
+        function validateAndSubmit(event) {
+            const fileInput = document.getElementById('csv-file');
+            const file = fileInput.files[0];
+            const submitBtn = document.getElementById('submit-btn');
+
+            if (!file) {
+                alert("ファイルを選択してください。");
+                event.preventDefault();
+                return false;
+            }
+
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                alert("エラー：CSVファイルのみアップロード可能です。\n(.csv形式のファイルを選択してください)");
+                event.preventDefault();
+                return false;
+            }
+
+            const maxSize = 10 * 1024 * 1024;
+            if (file.size > maxSize) {
+                const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+                alert(`エラー：ファイルサイズが大きすぎます。\n(上限: 10MB / 選択されたファイル: ${sizeInMB}MB)`);
+                event.preventDefault();
+                return false;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.value = "処理中...";
+            return true;
+        }
+
+        // ★追加: 画面ロード後の処理（D&D制御）
+        document.addEventListener('DOMContentLoaded', () => {
+            const overlay = document.getElementById('drop-overlay');
+            const fileInput = document.getElementById('csv-file');
+            const fileLabel = document.getElementById('file-label'); // ファイル名表示用
+
+            // 1. ドラッグして画面に入ってきた時
+            window.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                overlay.style.display = 'flex';
+            });
+
+            // 2. ドラッグ中 (これをpreventDefaultしないとdropイベントが発火しない)
+            window.addEventListener('dragover', (e) => {
+                e.preventDefault();
+            });
+            overlay.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            });
+
+            // 3. ドラッグして画面外に出た時、またはオーバーレイ上でキャンセルした時
+            overlay.addEventListener('dragleave', (e) => {
+                // 関連ターゲットがnull (画面外) の場合のみ消す
+                if (!e.relatedTarget || e.relatedTarget.nodeName === "HTML") {
+                    // overlay.style.display = 'none'; // チラつき防止のため厳密にはやらないことが多いが、今回は簡易的に
+                }
+                // 今回はシンプルに「ドロップか、クリックで閉じる」運用でもいいが、
+                // 「overlayそのもの」から出た時だけ消す判定を入れる
+                if (e.target === overlay) {
+                    overlay.style.display = 'none';
+                }
+            });
+
+            // 4. ドロップ時
+            overlay.addEventListener('drop', (e) => {
+                e.preventDefault();
+                overlay.style.display = 'none';
+
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    // input type="file" にセット
+                    fileInput.files = files;
+
+                    // ファイル名を表示更新
+                    updateFileName(files[0].name);
+                }
+            });
+
+            // 通常のクリックでファイル選択した時もファイル名を更新
+            fileInput.addEventListener('change', (e) => {
+                if (fileInput.files.length > 0) {
+                    updateFileName(fileInput.files[0].name);
+                }
+            });
+
+            function updateFileName(name) {
+                // ラベルのテキストを更新して、選択されたことを分かりやすくする
+                fileLabel.innerHTML = `✅ 選択中: <strong>${name}</strong>`;
+                fileLabel.style.color = "#0056b3";
+            }
+        });
+    </script>
+</head>
+<body>
+    <div id="drop-overlay">
+        ここにCSVファイルをドロップ
+        <p>(マウスを離すとセットされます)</p>
+    </div>
+
+    <div class="container">
+        <h1>DC入庫発注データ取込</h1>
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="alert alert-info">
+            {% for message in messages %}
+            <div>{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% if error_list %}
+        <div class="alert alert-danger">
+            <h4 style="margin-top: 0;">⚠ 以下のエラーを確認してください</h4>
+            <ul style="margin-bottom: 0; padding-left: 20px;">
+                {% for error in error_list %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {# プレビュー用ダミーデータDL　本番時削除　ここから #}
+        <div style="text-align: right; margin-bottom: 5px;">
+            <a href="{{ url_for('dc_in.download_sample') }}" style="color: #28a745; text-decoration: none; font-size: 14px; border: 1px solid #28a745; padding: 5px 10px; border-radius: 4px;">
+                📥 テスト用ダミーデータ.csv をダウンロード
+            </a>
+        </div>
+        {# プレビュー用ダミーデータDL　本番時削除　ここまで #}
+        
+        <form method="POST" action="{{ url_for('dc_in.show_confirmation') }}" enctype="multipart/form-data" onsubmit="return validateAndSubmit(event)">
+            <div class="upload-area">
+                <label id="file-label" for="csv-file" style="display:block; margin-bottom:10px; font-weight:bold; font-size:1.1em;">
+                    📂 CSVファイルをここにドロップ<br>
+                    <span style="font-size:0.8em; font-weight:normal;">または クリックして選択</span>
+                </label>
+
+                <input type="file" id="csv-file" name="file" accept=".csv" required>
+                <br>
+                <input type="submit" id="submit-btn" value="データをアップロードして確認">
+            </div>
+        </form>
+
+        <hr class="separator">
+
+        <div class="menu-section">
+            <div class="nav-card">
+                <span class="nav-title">▼ 登録済みデータの確認</span>
+                <a href="{{ url_for('dc_in.voucher_list') }}" class="nav-btn">
+                    🔎 伝票一覧・検索
+                </a>
+            </div>
+
+            <div class="nav-card admin-card">
+                <span class="nav-title admin-title">▼ 管理者メニュー</span>
+                <a href="{{ url_for('dc_in.edit_limits') }}" class="nav-btn admin-btn">
+                    ⚙️ 入庫上限数量設定
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
