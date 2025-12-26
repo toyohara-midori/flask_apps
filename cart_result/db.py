@@ -223,35 +223,68 @@ def get_category_titles():
 
 def get_cucd_info_map():
     """
-    CucdInfo + custype から
-    floorSpace, scmCucd(type), vehicle を取得し、
+    CucdInfo + custype + cq12cucd から
+    floorSpace, scmCucd(type), vehicle(判定後文字列) を取得し、
     cucd をキーとする辞書で返す。
     """
+
+    # -------------------------
+    # ① SQLS08-14 側データ取得
+    # -------------------------
     with get_connection("SQLS08-14") as conn:
         cur = conn.cursor()
         cur.execute("""
             SELECT
                 ci.cucd,
                 ci.floorSpace,
-                ct.type AS scmCucd,
-                ci.vehicle
+                ct.type AS scmCucd
             FROM dbo.CucdInfo ci
             LEFT JOIN DBA.custype ct
                 ON ct.cucd = ci.cucd
         """)
         rows = cur.fetchall()
 
+    # -------------------------
+    # ② master 側 yoseki 取得
+    # -------------------------
+    with get_connection("master") as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                cucd,
+                yoseki
+            FROM cq12cucd
+        """)
+        yoseki_rows = cur.fetchall()
+
+    # cucd → yoseki の辞書
+    yoseki_map = {
+        str(r.cucd).strip(): r.yoseki
+        for r in yoseki_rows
+    }
+
+    # -------------------------
+    # ③ データ組み立て
+    # -------------------------
     info = {}
+
     for r in rows:
         cucd = str(r.cucd).strip()
 
-        # scmCucd(type) が NULL の場合は空欄
         scm = "" if r.scmCucd is None else str(r.scmCucd).strip()
+
+        yoseki = yoseki_map.get(cucd)
+
+        # vehicle 判定
+        if yoseki == 20085000:
+            vehicle = "10トン"
+        else:
+            vehicle = "増トン"
 
         info[cucd] = {
             "floorSpace": r.floorSpace,
-            "scmCucd": scm,   # ← '003' / '004'
-            "vehicle": "" if r.vehicle is None else str(r.vehicle).strip(),
+            "scmCucd": scm,     # '003' / '004'
+            "vehicle": vehicle # ← 新仕様
         }
 
     return info
