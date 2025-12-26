@@ -106,7 +106,7 @@ def fetch_cart_stay_all(year: int):
         # ② 新テーブル構造に対応した SELECT（catcd / count）
         sql = """
             SELECT cucd, idleDate, catcd, count
-            FROM CartStayCount
+            FROM DBA.CartStayCount
             WHERE idleDate BETWEEN ? AND ?
         """
         cur.execute(sql, (start_date, end_date))
@@ -150,7 +150,7 @@ def fetch_total_for_date_and_kbn(target_date: date, kbn_no):
             # catcd 1〜4 の全部
             sql = """
                 SELECT COALESCE(SUM(count), 0)
-                FROM CartStayCount
+                FROM DBA.CartStayCount
                 WHERE idleDate = ?
                   AND catcd IN (1, 2, 3, 4)
             """
@@ -159,7 +159,7 @@ def fetch_total_for_date_and_kbn(target_date: date, kbn_no):
             # kbn_no は 1〜4
             sql = """
                 SELECT COALESCE(SUM(count), 0)
-                FROM CartStayCount
+                FROM DBA.CartStayCount
                 WHERE idleDate = ?
                   AND catcd = ?
             """
@@ -176,7 +176,7 @@ def fetch_cart_stay_period(start_date, end_date):
         cur = conn.cursor()
         sql = """
             SELECT cucd, idleDate, catcd, count
-            FROM CartStayCount
+            FROM DBA.CartStayCount
             WHERE idleDate BETWEEN ? AND ?
         """
         cur.execute(sql, (start_date, end_date))
@@ -207,7 +207,7 @@ def get_category_titles():
         cur = conn.cursor()
         cur.execute("""
             SELECT catcd, catname
-            FROM CartCategory
+            FROM DBA.CartCategory
             ORDER BY catcd
         """)
         rows = cur.fetchall()
@@ -238,7 +238,7 @@ def get_cucd_info_map():
                 ci.cucd,
                 ci.floorSpace,
                 ct.type AS scmCucd
-            FROM dbo.CucdInfo ci
+            FROM DBA.CucdInfo ci
             LEFT JOIN DBA.custype ct
                 ON ct.cucd = ci.cucd
         """)

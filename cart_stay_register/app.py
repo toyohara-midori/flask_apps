@@ -34,7 +34,7 @@ def cart_stay_index():
 @cart_bp.route("/api/cart_category_list")
 @login_required
 def api_category_list():
-    sql = "SELECT catcd, catname FROM dbo.CartCategory ORDER BY catcd"
+    sql = "SELECT catcd, catname FROM DBA.CartCategory ORDER BY catcd"
     with get_connection("SQLS08-14") as conn:
         cur = conn.cursor()
         rows = cur.execute(sql).fetchall()
@@ -58,12 +58,20 @@ def api_check_date():
     try:
         with get_connection("SQLS08-14") as conn:
             cur = conn.cursor()
+            # 同一CUCD/日付のレコードが複数存在することがあるので、最新のレコードのみ取得
             sql = """
                 SELECT catcd, count
-                FROM CartStayCount
-                WHERE cucd = ? AND idleDate = ?
+                FROM DBA.CartStayCount
+                WHERE cucd = ?
+                AND idleDate = ?
+                AND rgdt = (
+                        SELECT MAX(rgdt)
+                        FROM DBA.CartStayCount
+                        WHERE cucd = ?
+                        AND idleDate = ?
+                )
             """
-            cur.execute(sql, (cucd, idle_date))
+            cur.execute(sql, (cucd, idle_date, cucd, idle_date))
             rows = cur.fetchall()
 
         # データが1件もない場合
@@ -125,7 +133,7 @@ def api_register_cart():
             # ① 既存データ取得
             cur.execute("""
                 SELECT catcd, count 
-                FROM CartStayCount
+                FROM DBA.CartStayCount
                 WHERE cucd = ? AND idleDate = ?
             """, (cucd, idle_date))
 
@@ -140,24 +148,18 @@ def api_register_cart():
             if all(old_values[k] == cat_values[k] for k in old_values):
                 return jsonify(ok=True, msg="既に同じ登録があります")
 
-            # ③ catcd 1〜4 をループで insert/update
+            # ループ前に現在日時を1回だけ取得
+            now_dt = datetime.now()
+
+            # ③ catcd 1〜4 をループで insert(更新でも常にINSERTする)
             for catcd in [1, 2, 3, 4]:
                 new_count = cat_values[catcd]
 
-                if old_values[catcd] == 0 and new_count != 0:
-                    # INSERT
-                    cur.execute("""
-                        INSERT INTO CartStayCount (cucd, idleDate, catcd, count, rgtm)
-                        VALUES (?, ?, ?, ?, GETDATE())
-                    """, (cucd, idle_date, catcd, new_count))
-
-                elif old_values[catcd] != 0:
-                    # UPDATE（値が0でも更新する）
-                    cur.execute("""
-                        UPDATE CartStayCount
-                        SET count = ?, rgtm = GETDATE()
-                        WHERE cucd = ? AND idleDate = ? AND catcd = ?
-                    """, (new_count, cucd, idle_date, catcd))
+                # INSERT
+                cur.execute("""
+                    INSERT INTO DBA.CartStayCount (cucd, idleDate, catcd, count, rgdt)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (cucd, idle_date, catcd, new_count, now_dt))
 
             conn.commit()
 

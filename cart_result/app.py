@@ -819,12 +819,31 @@ def get_data():
     with get_connection("SQLS08-14") as conn:
         cur = conn.cursor()
 
+        # 同一CUCD/日付のレコードが複数存在することがあるので、最新のレコードのみ取得
         sql = """
-            SELECT cucd, idleDate, cat1, cat2, cat3, cat4
-            FROM CartStayCount
-            WHERE idleDate BETWEEN ? AND ?
+            SELECT
+                c.cucd,
+                c.idleDate,
+                c.cat1,
+                c.cat2,
+                c.cat3,
+                c.cat4
+            FROM DBA.CartStayCount c
+            INNER JOIN (
+                SELECT
+                    cucd,
+                    idleDate,
+                    MAX(rgdt) AS max_rgdt
+                FROM DBA.CartStayCount
+                WHERE idleDate BETWEEN ? AND ?
+                GROUP BY cucd, idleDate
+            ) m
+                ON  m.cucd     = c.cucd
+                AND m.idleDate = c.idleDate
+                AND m.max_rgdt = c.rgdt
+            WHERE c.idleDate BETWEEN ? AND ?
         """
-        cur.execute(sql, (sd, ed))
+        cur.execute(sql, (sd, ed, sd, ed))
         rows = cur.fetchall()
 
     # ---- 2) データを辞書化（(cucd, date) → 値） ----
